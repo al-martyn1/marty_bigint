@@ -36,7 +36,7 @@ namespace bigint_details {
 
 #if defined(MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE)
 
-    using underlying_unsigned_t = MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE;
+    using underlying_unsigned_t   = MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE;
 
 #else
 
@@ -61,20 +61,26 @@ namespace bigint_details {
 
     // Надо тестировать, а пока ограничим размер чанка 32мя битами.
 
+    // Также нам надо иметь тип, вдвое более широкий, чем тип хранения, для реализации
+    // умножения - двойной тип должен без потерь вмещать результат умножения двух одинарных значений.
+
+    // Также, лучше бы нам иметь нативный тип для хранения чанков длинного числа, размером в половину
+    // того, что нативно умеет умножаться на платформе. 
+
 
     #if defined(__cpp_constexpr) && __cpp_constexpr >= 201603
     
         #if (sizeof(int)==1)
         
-            using underlying_unsigned_t = std::uint_fast8_t ;
+            using underlying_unsigned_t  = std::uint_fast8_t ;
         
         #elif (sizeof(int)==2)
         
-            using underlying_unsigned_t = std::uint_fast16_t;
+            using underlying_unsigned_t  = std::uint_fast8_t;
         
         #elif (sizeof(int)==4)
         
-            using underlying_unsigned_t = std::uint_fast32_t;
+            using underlying_unsigned_t  = std::uint_fast16_t;
         
         #else
         
@@ -86,23 +92,23 @@ namespace bigint_details {
     
         #if defined(_WIN64) || defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(__LP64__)
             
-            using underlying_unsigned_t = std::uint_fast32_t;
+            using underlying_unsigned_t  = std::uint_fast32_t;
         
         #elif !defined(PLATFORM_BITS) && (defined(_WIN32) || defined(__i386__) || defined(__arm__) || defined(__ILP32__))
             
-            using underlying_unsigned_t = std::uint_fast32_t;
+            using underlying_unsigned_t  = std::uint_fast16_t;
         
         #elif !defined(PLATFORM_BITS) && (defined(__MSDOS__) || defined(__DOS__) || defined(__SMALL__))
             
-            using underlying_unsigned_t = std::uint_fast16_t ;
+            using underlying_unsigned_t  = std::uint_fast8_t ;
     
         #elif !defined(PLATFORM_BITS) && (defined(__AVR__) || defined(__8051__) || defined(__PIC__))
             
-            using underlying_unsigned_t = std::uint_fast8_t;
+            using underlying_unsigned_t  = std::uint_fast8_t;
     
         #else
             
-            using underlying_unsigned_t = unsigned;
+            using underlying_unsigned_t  = unsigned;
     
         #endif
     
@@ -111,9 +117,57 @@ namespace bigint_details {
 #endif
 
 
-using unsigned_t = underlying_unsigned_t;
+
+//----------------------------------------------------------------------------
+namespace detail {
+
+template<bool B> struct always_false : std::false_type {};
+
+template<size_t Size, bool IsUnsigned> struct double_size_helper;
+
+// Signed types
+template<> struct double_size_helper<1, false> { using type = std::int16_t; };
+template<> struct double_size_helper<2, false> { using type = std::int32_t; };
+template<> struct double_size_helper<4, false> { using type = std::int64_t; };
+// template<> struct double_size_helper<8, false>
+// {
+//     static_assert(always_false<false>::value, "128-bit signed type not supported");
+// };
+
+// Unsigned types
+template<> struct double_size_helper<1, true> { using type = std::uint16_t; };
+template<> struct double_size_helper<2, true> { using type = std::uint32_t; };
+template<> struct double_size_helper<4, true> { using type = std::uint64_t; };
+// template<> struct double_size_helper<8, true>
+// {
+//     static_assert(always_false<false>::value, "128-bit unsigned type not supported");
+// };
 
 
+template<typename T>
+struct double_size
+{
+    static_assert(std::is_integral_v<T>, "T must be an integral type");
+
+    static constexpr size_t size = sizeof(T);
+
+    static_assert(size == 1 || size == 2 || size == 4  /* || size == 8 */ , "Unsupported size for doubling");
+
+    using type = typename detail::double_size_helper<size, std::is_unsigned_v<T>>::type;
+};
+
+template<typename T> using double_size_t = typename double_size<T>::type;
+//----------------------------------------------------------------------------
+
+} // namespace detail
+
+//----------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------
+using unsigned_t  = underlying_unsigned_t;
+using unsigned2_t = detail::double_size_t<unsigned_t>;
 
 #ifndef MARTY_BIGINT_USE_VECTOR
 
@@ -125,9 +179,11 @@ using unsigned_t = underlying_unsigned_t;
 
 #endif
 
+//----------------------------------------------------------------------------
 
 
 
+//----------------------------------------------------------------------------
 
 } // namespace bigint_details
 } // namespace marty

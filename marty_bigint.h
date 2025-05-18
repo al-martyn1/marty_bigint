@@ -20,6 +20,7 @@
 
 #endif
 
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -44,7 +45,14 @@ class BigInt
 protected: // member fields
 
     using unsigned_t      = marty::bigint_details::unsigned_t;
+    using unsigned2_t     = marty::bigint_details::unsigned2_t;
     using number_holder_t = marty::bigint_details::number_holder_t;
+
+    constexpr const static inline std::size_t chunkSize  = sizeof(unsigned_t);
+    constexpr const static inline int         iChunkSize = int(chunkSize);
+
+    constexpr const static inline std::size_t chunkSizeBits  = CHAR_BIT * chunkSize ;
+    constexpr const static inline int         iChunkSizeBits = CHAR_BIT * iChunkSize;
 
     number_holder_t       m_module;
     int                   m_sign = 0;
@@ -125,6 +133,11 @@ protected: // operations implementation helpers
     static number_holder_t shrinkLeadingZerosCopy(number_holder_t m) { shrinkLeadingZeros(m); return m; }
     void shrinkLeadingZeros()  { shrinkLeadingZeros(m_module); checkModuleEmpty(); }
 
+    void negate() { m_sign = -m_sign; }
+    auto negated() const { auto res = *this; res.negate(); return res; }
+
+    bool boolCast() const { return m_sign!=0; }
+
     static void moduleInc(number_holder_t &m);
     static void moduleDec(number_holder_t &m);
 
@@ -136,6 +149,90 @@ protected: // operations implementation helpers
     // m2 - вычитаемое
     // уменьшаемое должно быть больше или равно вычитаемому
     static number_holder_t moduleSub(const number_holder_t& m1, number_holder_t m2);
+
+
+    // Сдвиг влево увеличивает число
+    // Для сдвига влево нам надо вставить нулевой элемент в начало
+    // Выдвигаемый бит(биты) надо взять со старших позиций
+    // и переместить их на младшие разряды
+
+    template<std::size_t size>
+    static void moduleShiftLeftHelper(number_holder_t &m)
+    {
+        unsigned_t tmp = 0;
+        for(auto &v : m)
+        {
+            unsigned_t newTmp = unsigned_t(bigint_utils::shiftBitsToLow<size, unsigned_t>(v) & bigint_utils::makeLowBitsMask<size, unsigned_t>());
+            v <<= size;
+            v |= tmp;
+            tmp = newTmp;
+        }
+
+        if (tmp)
+            m.emplace_back(tmp);
+
+        // shrinkLeadingZeros(); // так как мы не отбрасываем биты, 
+        // а расширяем размер числа (если появился сдвиг в новые разряды), 
+        // то нет нужды проверять наличие ведущих нулей
+    }
+
+    // Сдвиг вправо уменьшает число
+    template<std::size_t size>
+    static void moduleShiftRightHelper(number_holder_t &m)
+    {
+        unsigned_t tmp = 0;
+
+        for (std::size_t i=m.size(); i-->0;)
+        {
+            auto &v = m[i];
+            // Сначала применяем маску к младшим разрядам, потом перемещаем биты на старшие позиции
+            unsigned_t newTmp = bigint_utils::shiftBitsToHigh<size, unsigned_t>(unsigned_t(v & bigint_utils::makeLowBitsMask<size, unsigned_t>()));
+            v >>= size;
+            v |= tmp;
+            tmp = newTmp;
+        }
+
+        // а вот тут мы ничего не делаем, биты выдвигаемые с младших разрядов, просто теряются
+        shrinkLeadingZeros(m);
+
+    }
+
+    // Отрицательная величина сдвига меняет направление сдвига? Или кинуть исключение?
+    void shiftLeftImpl(int v);
+    void shiftRightImpl(int v);
+
+
+    template<typename Op>
+    number_holder_t moduleBitOpImpl(const number_holder_t &m1, const number_holder_t &m2, Op op)
+    {
+        std::size_t maxSize = std::max(m1.size(), m2.size());
+    
+        number_holder_t res; res.reserve(maxSize);
+    
+        for(std::size_t i=0; i!=maxSize; ++i)
+        {
+            unsigned_t v1 = 0;
+            unsigned_t v2 = 0;
+    
+            if (i<m1.size())
+                v1 = m1[i];
+        
+            if (i<m2.size())
+                v2 = m2[i];
+    
+            res.emplace_back(static_cast<unsigned_t>(op(v1, v2)));
+        
+        }
+
+        shrinkLeadingZeros(res);
+        return res;
+    }
+
+    BigInt& andImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1&i2; } ); checkModuleEmpty(); return *this; }
+    BigInt& orImpl (const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1|i2; } ); checkModuleEmpty(); return *this; }
+    BigInt& xorImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1^i2; } ); checkModuleEmpty(); return *this; }
+    BigInt& invImpl()                    { m_module = moduleBitOpImpl(m_module, number_holder_t(), [](auto i1, auto i2) { MARTY_ARG_USED(i2); return ~i1; } ); checkModuleEmpty(); return *this; }
+
 
     BigInt& addImpl(int signOther, const number_holder_t &moduleOther);
     BigInt& addImpl(const BigInt &b) { return addImpl(b.m_sign, b.m_module); }
@@ -215,13 +312,42 @@ public: // compare, ==, !=, <, <=, >, >=
     bool operator> (const BigInt &b) const  { return compareImpl(b)> 0; }
 
 
-public: // aripmetic operators '+', '-', '/', '*'
+public: // arithmetic operators '+', '-', '/', '*'
+
+    BigInt operator+()                  { return *this; }
+    BigInt operator-()                  { return negated(); }
+
+    BigInt operator+(const BigInt &b)   { BigInt res = *this; return res.addImpl(b); }
+    BigInt operator-(const BigInt &b)   { BigInt res = *this; return res.subImpl(b); }
 
     BigInt& operator+=(const BigInt &b) { return addImpl(b); }
     BigInt& operator-=(const BigInt &b) { return subImpl(b); }
 
-    BigInt operator+(const BigInt &b)   { BigInt res = *this; return res.addImpl(b); }
-    BigInt operator-(const BigInt &b)   { BigInt res = *this; return res.subImpl(b); }
+
+public: // logical operators
+
+    explicit operator bool() const { return boolCast(); }
+    bool operator !() const        { return !boolCast(); }
+
+
+public: // shifts
+
+    BigInt  operator<< (int v) const { auto tmp = *this; tmp.shiftLeftImpl(v); return tmp; }
+    BigInt& operator<<=(int v)       { shiftLeftImpl(v); return *this; }
+    BigInt  operator>> (int v) const { auto tmp = *this; tmp.shiftRightImpl(v); return tmp; }
+    BigInt& operator>>=(int v)       { shiftRightImpl(v); return *this; }
+
+public: // bit ops
+
+    BigInt  operator& (const BigInt &b) const { auto tmp = *this; tmp.andImpl(b); return tmp; }
+    BigInt  operator| (const BigInt &b) const { auto tmp = *this; tmp.orImpl (b); return tmp; }
+    BigInt  operator^ (const BigInt &b) const { auto tmp = *this; tmp.xorImpl(b); return tmp; }
+
+    BigInt& operator&=(const BigInt &b)       { andImpl(b); return *this; }
+    BigInt& operator|=(const BigInt &b)       { orImpl (b); return *this; }
+    BigInt& operator^=(const BigInt &b)       { xorImpl(b); return *this; }
+
+    BigInt  operator~ () const                { auto tmp = *this; tmp.invImpl(); return tmp; }
 
 
 }; // class BigInt
@@ -490,6 +616,94 @@ BigInt& BigInt::subImpl(int signOther, const number_holder_t &moduleOther)
 
 //----------------------------------------------------------------------------
 
+
+
+//----------------------------------------------------------------------------
+// Отрицательная величина сдвига меняет направление сдвига? Или кинуть исключение?
+void BigInt::shiftLeftImpl(int v)
+{
+    if (v<0)
+        throw std::invalid_argument("BigInt: negative shift value");
+
+    if (!m_sign)
+        return; // сдвиг нуля даст ноль всё равно
+
+    if (m_module.empty())
+        return; // сдвигать нечего, тут лучше ассерт
+
+    while(!m_module.empty() && v>=iChunkSizeBits)
+    {
+        std::rotate(m_module.rbegin(), m_module.rbegin() + 1, m_module.rend());
+        if (m_module[0])
+        m_module.emplace_back(m_module[0]);
+        m_module[0] = 0;
+        v -= iChunkSizeBits;
+    }
+
+    while(!m_module.empty() && v>=8)
+    {
+        moduleShiftLeftHelper<8>(m_module);
+        v -= 8;
+    }
+
+    while(!m_module.empty() && v>=4)
+    {
+        moduleShiftLeftHelper<4>(m_module);
+        v -= 4;
+    }
+
+    while(!m_module.empty() && v>=1)
+    {
+        moduleShiftLeftHelper<1>(m_module);
+        v -= 1;
+    }
+
+    checkModuleEmpty();
+
+}
+
+//----------------------------------------------------------------------------
+void BigInt::shiftRightImpl(int v)
+{
+    if (v<0)
+        throw std::invalid_argument("BigInt: negative shift value");
+
+    if (!m_sign)
+        return; // сдвиг нуля даст ноль всё равно
+
+    while(!m_module.empty() && v>=iChunkSizeBits)
+    {
+        std::rotate(m_module.begin(), m_module.begin() + 1, m_module.end());
+        m_module.pop_back();
+        v -= iChunkSizeBits;
+    }
+
+    while(!m_module.empty() && v>=8)
+    {
+        moduleShiftRightHelper<8>(m_module);
+        v -= 8;
+    }
+
+    while(!m_module.empty() && v>=4)
+    {
+        moduleShiftRightHelper<4>(m_module);
+        v -= 4;
+    }
+
+    while(!m_module.empty() && v>=1)
+    {
+        moduleShiftRightHelper<1>(m_module);
+        v -= 1;
+    }
+
+    checkModuleEmpty();
+
+}
+
+
+// Алгоритм Фюрера - https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%A4%D1%8E%D1%80%D0%B5%D1%80%D0%B0
+// Алгоритм Карацубы - https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%9A%D0%B0%D1%80%D0%B0%D1%86%D1%83%D0%B1%D1%8B
+// Какой метод умножения чисел эффективнее: алгоритм Фюрера или алгоритм Карацубы?
 
 
 //----------------------------------------------------------------------------
