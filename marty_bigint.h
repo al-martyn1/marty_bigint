@@ -42,6 +42,16 @@ namespace marty {
 class BigInt
 {
 
+public: // types
+
+    enum MultiplicationMethod
+    {
+        auto_ = 0,
+        school,
+        karatsuba,
+        furer
+    };
+
 protected: // member fields
 
     using unsigned_t      = marty::bigint_details::unsigned_t;
@@ -56,6 +66,24 @@ protected: // member fields
 
     number_holder_t       m_module;
     int                   m_sign = 0;
+
+    //static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::auto_;
+    //static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::karatsuba;
+    static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::furer;
+
+
+public: // static methods
+
+    static MultiplicationMethod setMultiplicationMethod(MultiplicationMethod mm)
+    {
+        std::swap(mm, s_multiplicationMethod);
+        return mm;
+    }
+
+    static MultiplicationMethod getMultiplicationMethod()
+    {
+        return s_multiplicationMethod;
+    }
 
 
 public: // basic ctors & operators
@@ -144,6 +172,9 @@ protected: // operations implementation helpers
     static int moduleCompare(const number_holder_t &m1, number_holder_t m2);
 
     static number_holder_t moduleAdd(const number_holder_t &m1, const number_holder_t &m2);
+    static void moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, std::size_t b=std::size_t(-1), std::size_t e=std::size_t(-1)); // adds m2 to m1
+    static void moduleExpandTo(number_holder_t &m, std::size_t size, unsigned_t v); // aka resize, with v
+    static void moduleFill(number_holder_t &m, unsigned_t v, std::size_t b=std::size_t(-1), std::size_t e=std::size_t(-1)); // fill vector with v
 
     // m1 - уменьшаемое
     // m2 - вычитаемое
@@ -197,6 +228,12 @@ protected: // operations implementation helpers
 
     }
 
+    static void moduleShiftLeft(number_holder_t &m, int v);
+    static void moduleShiftRight(number_holder_t &m, int v);
+    static number_holder_t moduleShiftLeftCopy(const number_holder_t &m, int v);
+    static number_holder_t moduleShiftRightCopy(const number_holder_t &m, int v);
+
+
     // Отрицательная величина сдвига меняет направление сдвига? Или кинуть исключение?
     void shiftLeftImpl(int v);
     void shiftRightImpl(int v);
@@ -242,6 +279,13 @@ protected: // operations implementation helpers
 
     int compareImpl(int signOther, const number_holder_t &moduleOther) const;
     int compareImpl(const BigInt& b) const { return compareImpl(b.m_sign, b.m_module); }
+
+    static number_holder_t moduleFurerMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleKaratsubaMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleSchoolMul(const number_holder_t &m1, const number_holder_t &m2);
+
+    BigInt& mulImpl(const BigInt &b);
+
 
 
 protected: // ctors
@@ -322,6 +366,9 @@ public: // arithmetic operators '+', '-', '/', '*'
 
     BigInt& operator+=(const BigInt &b) { return addImpl(b); }
     BigInt& operator-=(const BigInt &b) { return subImpl(b); }
+
+    BigInt operator*(const BigInt &b)   { BigInt res = *this; return res.mulImpl(b); }
+    BigInt& operator*=(const BigInt &b) { return mulImpl(b); }
 
 
 public: // logical operators
@@ -414,8 +461,29 @@ int BigInt::moduleCompare(const number_holder_t &m1, number_holder_t m2)
 
 //----------------------------------------------------------------------------
 inline
+void BigInt::moduleExpandTo(number_holder_t &m, std::size_t size, unsigned_t v)
+{
+    m.resize(size, v);
+}
+
+//----------------------------------------------------------------------------
+inline
+void BigInt::moduleFill(number_holder_t &m, unsigned_t v, std::size_t b, std::size_t e)
+{
+    if (e>=m.size())
+        e = m.size();
+
+    if (b>=m.size())
+        b = 0;
+
+    std::fill(m.begin()+std::ptrdiff_t(b), m.begin()+std::ptrdiff_t(e), v);
+}
+
+//----------------------------------------------------------------------------
+inline
 BigInt::number_holder_t BigInt::moduleAdd(const number_holder_t &m1, const number_holder_t &m2)
 {
+#if 0
     std::size_t maxSize = std::max(m1.size(), m2.size());
 
     number_holder_t res; res.reserve(maxSize);
@@ -453,6 +521,67 @@ BigInt::number_holder_t BigInt::moduleAdd(const number_holder_t &m1, const numbe
         res.emplace_back(unsigned_t(1));
 
     return res;
+#endif
+
+    number_holder_t res = m1;
+    moduleAddInplace(res, m2);
+    shrinkLeadingZeros(res);
+    return res;
+
+}
+
+//----------------------------------------------------------------------------
+void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, std::size_t b, std::size_t e) // adds m2 to m1
+{
+    if (e==std::size_t(-1))
+        e = std::max(m1.size(), m2.size());
+
+    ++e; // увеличиваем конечный индекс, чтобы не нужно было отдельно обрабатывать последнее переполнение
+
+    if (b==std::size_t(-1))
+        b = 0;
+
+    bool prevOverflow = false;
+
+    std::size_t i = b;
+
+    for(; i!=e; ++i)
+    {
+        unsigned_t v1 = 0;
+        unsigned_t v2 = 0;
+
+        if (i<m1.size())
+            v1 = m1[i];
+    
+        if (i<m2.size())
+            v2 = m2[i];
+
+        unsigned_t r = unsigned_t(v1 + v2);
+
+        bool nextOverflow = (r<v1) || r<v2;
+
+        if (prevOverflow)
+        {
+            ++r;
+            if (r==0) // Ноль меньше единицы, произошло переполнение
+                nextOverflow = true;
+        }
+
+        prevOverflow = nextOverflow;
+
+        if (i<m1.size())
+            m1[i] = r;
+        else
+            m1.emplace_back(r);
+    
+    }
+
+    // if (prevOverflow)
+    // {
+    //     m1.emplace_back(unsigned_t(1));
+    //  
+    // }
+
 }
 
 //----------------------------------------------------------------------------
@@ -500,7 +629,6 @@ BigInt::number_holder_t BigInt::moduleSub(const number_holder_t &m1, number_hold
     //     res.emplace_back(unsigned_t(1));
 
     return res;
-
 
     // // инвертировать и прибавить 1
     // for(auto &v: m2)
@@ -620,6 +748,118 @@ BigInt& BigInt::subImpl(int signOther, const number_holder_t &moduleOther)
 
 //----------------------------------------------------------------------------
 // Отрицательная величина сдвига меняет направление сдвига? Или кинуть исключение?
+inline
+void BigInt::moduleShiftLeft(number_holder_t &m, int v)
+{
+    if (m.empty())
+        return;
+
+    const int nBitsFullChunks = v - v%iChunkSizeBits;
+    const int nFullChunks     = nBitsFullChunks / iChunkSizeBits;
+    v -= nBitsFullChunks;
+
+    // Сдвиг влево - в сторону старших разрядов
+    // Младшие разряды у нас идут сначала
+    // Значит, надо просто вставить nFullChunks нулей в начало
+
+    m.insert(m.begin(), std::size_t(nFullChunks), 0);
+
+    // while(!m.empty() && v>=iChunkSizeBits)
+    // {
+    //     std::rotate(m.rbegin(), m.rbegin() + 1, m.rend());
+    //     if (m[0])
+    //         m.emplace_back(m[0]);
+    //     m[0] = 0;
+    //     v -= iChunkSizeBits;
+    // }
+
+    while(!m.empty() && v>=8)
+    {
+        moduleShiftLeftHelper<8>(m);
+        v -= 8;
+    }
+
+    while(!m.empty() && v>=4)
+    {
+        moduleShiftLeftHelper<4>(m);
+        v -= 4;
+    }
+
+    while(!m.empty() && v>=1)
+    {
+        moduleShiftLeftHelper<1>(m);
+        v -= 1;
+    }
+}
+
+//----------------------------------------------------------------------------
+inline
+void BigInt::moduleShiftRight(number_holder_t &m, int v)
+{
+    const int nBitsFullChunks = v - v%iChunkSizeBits;
+    const int nFullChunks     = nBitsFullChunks / iChunkSizeBits;
+    v -= nBitsFullChunks;
+
+    // Сдвиг вправо - в сторону младших разрядов
+    // Младшие разряды у нас идут сначала
+    // выдвигаемые значения просто пропадают
+    // Значит, надо просто удалить nFullChunks элементов в начале
+
+    if (m.size()<=std::size_t(nFullChunks))
+    {
+        m.clear();
+        return;
+    }
+
+    m.erase(m.begin(), m.begin()+ptrdiff_t(nFullChunks));
+
+
+    // while(!m.empty() && v>=iChunkSizeBits)
+    // {
+    //     std::rotate(m.begin(), m.begin() + 1, m.end());
+    //     m.pop_back();
+    //     v -= iChunkSizeBits;
+    // }
+
+    while(!m.empty() && v>=8)
+    {
+        moduleShiftRightHelper<8>(m);
+        v -= 8;
+    }
+
+    while(!m.empty() && v>=4)
+    {
+        moduleShiftRightHelper<4>(m);
+        v -= 4;
+    }
+
+    while(!m.empty() && v>=1)
+    {
+        moduleShiftRightHelper<1>(m);
+        v -= 1;
+    }
+}
+
+//----------------------------------------------------------------------------
+inline
+BigInt::number_holder_t BigInt::moduleShiftLeftCopy(const number_holder_t &m, int v)
+{
+    number_holder_t res = m;
+    moduleShiftLeft(res, v);
+    return res;
+}
+
+//----------------------------------------------------------------------------
+inline
+BigInt::number_holder_t BigInt::moduleShiftRightCopy(const number_holder_t &m, int v)
+{
+    number_holder_t res = m;
+    moduleShiftRight(res, v);
+    return res;
+}
+
+//----------------------------------------------------------------------------
+inline
 void BigInt::shiftLeftImpl(int v)
 {
     if (v<0)
@@ -628,41 +868,12 @@ void BigInt::shiftLeftImpl(int v)
     if (!m_sign)
         return; // сдвиг нуля даст ноль всё равно
 
-    if (m_module.empty())
-        return; // сдвигать нечего, тут лучше ассерт
-
-    while(!m_module.empty() && v>=iChunkSizeBits)
-    {
-        std::rotate(m_module.rbegin(), m_module.rbegin() + 1, m_module.rend());
-        if (m_module[0])
-        m_module.emplace_back(m_module[0]);
-        m_module[0] = 0;
-        v -= iChunkSizeBits;
-    }
-
-    while(!m_module.empty() && v>=8)
-    {
-        moduleShiftLeftHelper<8>(m_module);
-        v -= 8;
-    }
-
-    while(!m_module.empty() && v>=4)
-    {
-        moduleShiftLeftHelper<4>(m_module);
-        v -= 4;
-    }
-
-    while(!m_module.empty() && v>=1)
-    {
-        moduleShiftLeftHelper<1>(m_module);
-        v -= 1;
-    }
-
+    moduleShiftLeft(m_module, v);
     checkModuleEmpty();
-
 }
 
 //----------------------------------------------------------------------------
+inline
 void BigInt::shiftRightImpl(int v)
 {
     if (v<0)
@@ -697,13 +908,247 @@ void BigInt::shiftRightImpl(int v)
     }
 
     checkModuleEmpty();
-
 }
 
+//----------------------------------------------------------------------------
 
 // Алгоритм Фюрера - https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%A4%D1%8E%D1%80%D0%B5%D1%80%D0%B0
 // Алгоритм Карацубы - https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%9A%D0%B0%D1%80%D0%B0%D1%86%D1%83%D0%B1%D1%8B
 // Какой метод умножения чисел эффективнее: алгоритм Фюрера или алгоритм Карацубы?
+
+//----------------------------------------------------------------------------
+inline
+BigInt::number_holder_t BigInt::moduleSchoolMul(const number_holder_t &a, const number_holder_t &b)
+{
+/*
+           1234
+         *
+            864
+---------------
+             16  4*4
+            120  4*3
+            800  4*2
+           4000  4*1
+---------------
+            240  6*4
+           1800  6*3
+          12000  6*2
+          60000
+---------------
+           3200
+          24000
+         160000
+         800000
+---------------
+16+120+800+4000+240+1800+12000+60000+3200+24000+160000+800000=1066176
+
+Стартовый разряд равен сумме индексов умножаемых разрядов.
+
+*/
+    // Желательно внутренний цикл сделать более длинным, чем внешний
+    const number_holder_t &m1 =  (a.size()<b.size()) ? a : b;
+    const number_holder_t &m2 = !(a.size()<b.size()) ? a : b;
+
+    number_holder_t res; res.resize(m1.size()+m2.size()+1);
+    number_holder_t tmp; tmp.resize(m1.size()+m2.size()+1);
+
+    moduleFill(res, 0u);
+    moduleFill(tmp, 0u);
+
+    for(std::size_t i1=0; i1!=m1.size(); ++i1)
+    {
+        for(std::size_t i2=0; i2!=m2.size(); ++i2)
+        {
+            unsigned2_t tmpMul = unsigned2_t(unsigned2_t(m1[i1])*unsigned2_t(m2[i2]));
+            const std::size_t idx = i1+i2;
+            tmp[idx  ] = unsigned_t(tmpMul);
+            tmp[idx+1] = unsigned_t((tmpMul>>(sizeof(unsigned_t)*CHAR_BIT)));
+            moduleAddInplace(res, tmp, idx); // adds m2 to m1
+            moduleFill(tmp, 0u, idx, idx+1u);
+        }
+    }
+
+    shrinkLeadingZeros(res);
+    return res;
+}
+
+//----------------------------------------------------------------------------
+inline
+BigInt::number_holder_t BigInt::moduleFurerMul(const number_holder_t &a, const number_holder_t &b)
+{
+    // Алгоритм Фюрера - https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%A4%D1%8E%D1%80%D0%B5%D1%80%D0%B0
+    // Интересно про свёртки
+
+    // Проверил на бамажке - вроде работает. А что самое прикольное - гораздо проще всратого умножения столбиком.
+    // В статье по ссылке - число маленькое, было интересно, когда элемент свертки перевалит за два разряда.
+    // Будет не лень - настучу свой пример.
+
+    const number_holder_t &m1 =  (a.size()<b.size()) ? a : b;
+    const number_holder_t &m2 = !(a.size()<b.size()) ? a : b;
+
+    std::vector<number_holder_t> convolution = std::vector<number_holder_t>(m1.size()+m2.size()+1);
+    for(std::size_t i1=0; i1!=m1.size(); ++i1)
+    {
+        for(std::size_t i2=0; i2!=m2.size(); ++i2)
+        {
+            // convolution[i1+i2] += m1[i1] * m2[i2];
+            auto mTmp = BigInt( unsigned2_t(unsigned2_t(m1[i1])*unsigned2_t(m2[i2])) ).m_module;
+            moduleAddInplace(convolution[i1+i2], mTmp);
+        }
+    }
+
+    // Выдрано из реализации BCD десятичных чисел с плавающей точкой
+    // unsigned overflow = 0;
+    //  
+    // for( std::size_t i=0; i!=convSize; ++i )
+    // {
+    //     convolution[i] += overflow;
+    //     overflow = bcdCorrectOverflow(convolution[i]);
+    //     multRes.push_back((decimal_digit_t)convolution[i]);
+    // }
+    //  
+    // if (overflow)
+    // {
+    //     multRes.push_back((decimal_digit_t)overflow);
+    // }
+
+    // Переделал под BigInt, вроде даже работает
+
+
+    number_holder_t res; res.reserve(m1.size()+m2.size()+1); // res.resize(m1.size()+m2.size()+1);
+
+
+    // у нас переполнение не один признак, а число типа unsigned_t
+
+    number_holder_t overflow;
+
+    for(std::size_t i=0; i!=convolution.size(); ++i)
+    {
+        // Конвертируем одиночный unsigned_t overflow предыдущего переполнения
+        // в number_holder_t через использование конструктора BigInt 
+        // из интегрального типа, и сразу берем модуль
+        // Этот модуль передаём в функцию сложения 
+        //moduleAddInplace(convolution[i], BigInt(overflow).m_module); // convolution[i] += overflow;
+        moduleAddInplace(convolution[i], overflow); // convolution[i] += overflow;
+        // if (convolution[i].size()>2)
+        //     throw std::runtime_error("moduleFurerMul: somethin goes wrong (1)");
+
+        // auto tmp = convolution[i];
+        // tmp.erase(tmp.begin(), tmp.begin()+ptrdiff_t(1));
+        // overflow = tmp;
+        overflow = convolution[i];
+        overflow.erase(overflow.begin(), overflow.begin()+ptrdiff_t(1));
+
+        // if (convolution[i].size()>1)
+        //     overflow = convolution[i][1];
+        // else
+        //     overflow = 0;
+
+        // if (convolution[i].empty())
+        //     throw std::runtime_error("moduleFurerMul: somethin goes wrong (2)");
+
+        if (!convolution[i].empty())
+            res.emplace_back(convolution[i][0]);
+        
+    }
+
+    // if (overflow!=0)
+    //     res.emplace_back(overflow);
+    res.insert(res.end(), overflow.begin(), overflow.end());
+
+    // using unsigned_t      = marty::bigint_details::unsigned_t;
+    // using unsigned2_t     = marty::bigint_details::unsigned2_t;
+
+    shrinkLeadingZeros(res);
+
+    return res;
+
+}
+
+//----------------------------------------------------------------------------
+inline
+BigInt::number_holder_t BigInt::moduleKaratsubaMul(const number_holder_t &a, const number_holder_t &b)
+{
+    if (a.size() < 4 || b.size() < 4)
+       return moduleSchoolMul(a, b);
+
+    auto mid = ptrdiff_t(std::max(a.size(), b.size())/2u);
+    
+    auto low1  = number_holder_t(a.begin()      , a.begin() + mid);
+    auto high1 = number_holder_t(a.begin() + mid, a.end()        );
+    auto low2  = number_holder_t(b.begin()      , b.begin() + mid);
+    auto high2 = number_holder_t(b.begin() + mid, b.end()        );
+    
+    // Конвертим в BigInt, так как у нас есть вычитания, и, хотя в итоге должно получится положительное
+    // число, в промежуточных вычислениях теоретически могут получаться отрицательные значения
+    // (но я не проверял), а значит, нужна полновесная арифметика с учетом знака.
+    // Оверхед на учёт знака минимален.
+
+    auto z0 = BigInt(1, moduleKaratsubaMul(low1, low2));
+    auto z1 = BigInt(1, moduleKaratsubaMul(moduleAdd(low1, high1), moduleAdd(low2, high2)));
+    auto z2 = BigInt(1, moduleKaratsubaMul(high1, high2));
+
+    auto z2_shifted_by_2mid = BigInt(1, moduleShiftLeftCopy(z2.m_module, 2*int(mid))); // (z2 << (2*std::size_t(mid)))
+
+    return (z2_shifted_by_2mid + (((z1 - z2 - z0) << int(mid))) + z0).m_module;
+
+}
+
+#if 0
+inline
+BigInt karatsuba_mul(const BigInt& a, const BigInt& b)
+{
+    size_t m = std::max(a.modules.size(), b.modules.size())/2;
+    
+    BigInt low1(a.modules.begin(), a.modules.begin() + m);
+    BigInt high1(a.modules.begin() + m, a.modules.end());
+    BigInt low2(b.modules.begin(), b.modules.begin() + m);
+    BigInt high2(b.modules.begin() + m, b.modules.end());
+    
+    BigInt z0 = karatsuba_mul(low1, low2);
+    BigInt z1 = karatsuba_mul(low1 + high1, low2 + high2);
+    BigInt z2 = karatsuba_mul(high1, high2);
+    
+    return (z2 << (2*m)) + ((z1 - z2 - z0) << m) + z0;
+}
+#endif
+
+//----------------------------------------------------------------------------
+inline
+BigInt& BigInt::mulImpl(const BigInt &b)
+{
+    m_sign = m_sign*b.m_sign;
+    if (m_sign==0)
+    {
+        m_module.clear();
+        return *this;
+    }
+
+    // Наверное, тут надо проверять размеры модулей и возможно, для длинных модулей использовать алгоритм Фюрера
+    // Потом, когда-нибудь, реализую Фюрера, а также обычное умножение столбиком,
+    // и проверю, какой алгоритм на каких числах работает лучше.
+
+    switch(s_multiplicationMethod)
+    {
+        case MultiplicationMethod::school:
+             m_module = moduleSchoolMul(m_module, b.m_module);
+             break;
+
+        case MultiplicationMethod::karatsuba:
+             m_module = moduleKaratsubaMul(m_module, b.m_module);
+             break;
+
+        case MultiplicationMethod::furer:
+             m_module = moduleFurerMul(m_module, b.m_module);
+             break;
+
+        case MultiplicationMethod::auto_: [[fallthrough]];
+        default:
+             m_module = moduleSchoolMul(m_module, b.m_module);
+    }
+
+    return *this;
+}
 
 
 //----------------------------------------------------------------------------
