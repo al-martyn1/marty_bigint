@@ -52,6 +52,8 @@ public: // types
         furer
     };
 
+    using chunk_type      = marty::bigint_details::unsigned_t;
+
 protected: // member fields
 
     using unsigned_t      = marty::bigint_details::unsigned_t;
@@ -84,6 +86,9 @@ public: // static methods
     {
         return s_multiplicationMethod;
     }
+
+    static const char* getMultiplicationMethodName();
+    static const char* getMultiplicationMethodName(MultiplicationMethod);
 
 
 public: // basic ctors & operators
@@ -120,8 +125,7 @@ protected: // from int type construction helpers
 
        if constexpr (sizeof(unsigned_t)>=sizeof(T))
        {
-           m_module.emplace_back(unsigned_t(t));
-           return;
+           m_module.push_back(unsigned_t(t));
        }
        else
        {
@@ -130,11 +134,12 @@ protected: // from int type construction helpers
 
            while(t)
            {
-               m_module.emplace_back(unsigned_t(t%divisor));
+               m_module.push_back(unsigned_t(t%divisor));
                t /= divisor;
            }
-       }
 
+           shrinkLeadingZeros();
+       }
     }
     
     template < typename T, std::enable_if_t< std::is_integral_v<T> && std::is_signed_v<T>, int> = 0 >
@@ -200,7 +205,7 @@ protected: // operations implementation helpers
         }
 
         if (tmp)
-            m.emplace_back(tmp);
+            m.push_back(tmp);
 
         // shrinkLeadingZeros(); // так как мы не отбрасываем биты, 
         // а расширяем размер числа (если появился сдвиг в новые разряды), 
@@ -257,7 +262,7 @@ protected: // operations implementation helpers
             if (i<m2.size())
                 v2 = m2[i];
     
-            res.emplace_back(static_cast<unsigned_t>(op(v1, v2)));
+            res.push_back(static_cast<unsigned_t>(op(v1, v2)));
         
         }
 
@@ -286,6 +291,8 @@ protected: // operations implementation helpers
 
     BigInt& mulImpl(const BigInt &b);
 
+    BigInt& incImpl();
+    BigInt& decImpl();
 
 
 protected: // ctors
@@ -297,6 +304,27 @@ protected: // ctors
         shrinkLeadingZeros();
     }
 
+
+public: // misc methods
+
+    // Возвращает хранимый размер в битах
+    std::size_t size() const
+    {
+        if (m_sign==0)
+            return 0u;
+
+        return chunkSizeBits*m_module.size();
+    }
+
+    unsigned_t getLowChunk() const
+    {
+        return m_sign==0 || m_module.empty() ? unsigned_t(0) : m_module[0];
+    }
+
+    unsigned_t getHighChunk() const
+    {
+        return m_sign==0 || m_module.empty() ? unsigned_t(0) : m_module.back();
+    }
 
 
 public: // to integer convertion
@@ -356,19 +384,24 @@ public: // compare, ==, !=, <, <=, >, >=
     bool operator> (const BigInt &b) const  { return compareImpl(b)> 0; }
 
 
-public: // arithmetic operators '+', '-', '/', '*'
+public: // arithmetic operators '+', '-', '/', '*', ++, --
 
-    BigInt operator+()                  { return *this; }
-    BigInt operator-()                  { return negated(); }
+    BigInt operator+() const                 { return *this; }
+    BigInt operator-() const                  { return negated(); }
 
-    BigInt operator+(const BigInt &b)   { BigInt res = *this; return res.addImpl(b); }
-    BigInt operator-(const BigInt &b)   { BigInt res = *this; return res.subImpl(b); }
+    BigInt operator+(const BigInt &b) const   { BigInt res = *this; return res.addImpl(b); }
+    BigInt operator-(const BigInt &b) const   { BigInt res = *this; return res.subImpl(b); }
 
     BigInt& operator+=(const BigInt &b) { return addImpl(b); }
     BigInt& operator-=(const BigInt &b) { return subImpl(b); }
 
-    BigInt operator*(const BigInt &b)   { BigInt res = *this; return res.mulImpl(b); }
+    BigInt operator*(const BigInt &b) const   { BigInt res = *this; return res.mulImpl(b); }
     BigInt& operator*=(const BigInt &b) { return mulImpl(b); }
+
+    BigInt& operator++() { incImpl(); return *this; } // увеличивает, и возвращает уменьшенное
+    BigInt& operator--() { decImpl(); return *this; } // уменьшает, и возвращает уменьшенное
+    BigInt& operator++(int) { auto res = *this; incImpl(); return res; } // увеличивает, и возвращает исходное
+    BigInt& operator--(int) { auto res = *this; decImpl(); return res; } // уменьшает, и возвращает исходное
 
 
 public: // logical operators
@@ -536,6 +569,8 @@ void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, st
     if (e==std::size_t(-1))
         e = std::max(m1.size(), m2.size());
 
+    m1.reserve(m2.size());
+
     ++e; // увеличиваем конечный индекс, чтобы не нужно было отдельно обрабатывать последнее переполнение
 
     if (b==std::size_t(-1))
@@ -572,7 +607,7 @@ void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, st
         if (i<m1.size())
             m1[i] = r;
         else
-            m1.emplace_back(r);
+            m1.push_back(r);
     
     }
 
@@ -620,7 +655,7 @@ BigInt::number_holder_t BigInt::moduleSub(const number_holder_t &m1, number_hold
 
         prevOverflow = nextOverflow;
 
-        res.emplace_back(r);
+        res.push_back(r);
     
     }
 
@@ -630,21 +665,63 @@ BigInt::number_holder_t BigInt::moduleSub(const number_holder_t &m1, number_hold
 
     return res;
 
-    // // инвертировать и прибавить 1
-    // for(auto &v: m2)
-    // {
-    //     v = unsigned_t(~v);
-    // }
-    //  
-    // while(m2.size()<m1.size())
-    //     m2.emplace_back(unsigned_t(-1));
-    //  
-    // moduleInc(m2);
-    //  
-    // return shrinkLeadingZerosCopy(moduleAdd(m1, m2));
 }
 
 //----------------------------------------------------------------------------
+BigInt& BigInt::incImpl()
+{
+    if (!m_sign)
+    {
+        *this = BigInt(std::int8_t(1));
+        return *this;
+    }
+
+    if (m_sign>0) // Если число больше нуля, и операция инкремента, то вызываем инкремент модуля
+    {
+        moduleInc(m_module);
+        return *this;
+    }
+
+    // Число отрицательное, для инкремента надо уменьшить модуль
+
+    moduleDec(m_module);
+    shrinkLeadingZeros();
+    return *this;
+}
+
+//----------------------------------------------------------------------------
+BigInt& BigInt::decImpl()
+{
+    if (!m_sign)
+    {
+        *this = BigInt(std::int8_t(-1));
+        return *this;
+    }
+
+    if (m_sign<0) // Если число меньше нуля, и операция декремента, то вызываем инкремент модуля
+    {
+        moduleInc(m_module);
+        return *this;
+    }
+
+    // Число положительное, для декремента надо уменьшить модуль
+
+    moduleDec(m_module);
+    shrinkLeadingZeros();
+    return *this;
+}
+
+    // static void moduleInc(number_holder_t &m);
+    // static void moduleDec(number_holder_t &m);
+
+    // void checkModuleEmpty()    { if (m_module.empty()) m_sign = 0; }
+    //  
+    // static void shrinkLeadingZeros(number_holder_t &m);
+    // static number_holder_t shrinkLeadingZerosCopy(number_holder_t m) { shrinkLeadingZeros(m); return m; }
+    // void shrinkLeadingZeros()  { shrinkLeadingZeros(m_module); checkModuleEmpty(); }
+
+
+
 inline
 void BigInt::shrinkLeadingZeros(number_holder_t &m)
 {
@@ -1048,7 +1125,7 @@ BigInt::number_holder_t BigInt::moduleFurerMul(const number_holder_t &a, const n
         //     throw std::runtime_error("moduleFurerMul: somethin goes wrong (2)");
 
         if (!convolution[i].empty())
-            res.emplace_back(convolution[i][0]);
+            res.push_back(convolution[i][0]);
         
     }
 
@@ -1069,15 +1146,17 @@ BigInt::number_holder_t BigInt::moduleFurerMul(const number_holder_t &a, const n
 inline
 BigInt::number_holder_t BigInt::moduleKaratsubaMul(const number_holder_t &a, const number_holder_t &b)
 {
-    if (a.size() < 4 || b.size() < 4)
+    if ((a.size()+b.size()) <= 4)
        return moduleSchoolMul(a, b);
 
-    auto mid = ptrdiff_t(std::max(a.size(), b.size())/2u);
+    auto mid  = std::max(a.size(), b.size())/2u;
+    auto midA = ptrdiff_t(std::min(mid, a.size()));
+    auto midB = ptrdiff_t(std::min(mid, b.size()));
     
-    auto low1  = number_holder_t(a.begin()      , a.begin() + mid);
-    auto high1 = number_holder_t(a.begin() + mid, a.end()        );
-    auto low2  = number_holder_t(b.begin()      , b.begin() + mid);
-    auto high2 = number_holder_t(b.begin() + mid, b.end()        );
+    auto low1  = number_holder_t(a.begin()       , a.begin() + midA);
+    auto high1 = number_holder_t(a.begin() + midA, a.end()         );
+    auto low2  = number_holder_t(b.begin()       , b.begin() + midB);
+    auto high2 = number_holder_t(b.begin() + midB, b.end()         );
     
     // Конвертим в BigInt, так как у нас есть вычитания, и, хотя в итоге должно получится положительное
     // число, в промежуточных вычислениях теоретически могут получаться отрицательные значения
@@ -1144,12 +1223,41 @@ BigInt& BigInt::mulImpl(const BigInt &b)
 
         case MultiplicationMethod::auto_: [[fallthrough]];
         default:
+             //if ((a.size()+b.size()) < 4)
              m_module = moduleSchoolMul(m_module, b.m_module);
     }
 
     return *this;
 }
 
+//----------------------------------------------------------------------------
+inline
+const char* BigInt::getMultiplicationMethodName(MultiplicationMethod mm)
+{
+    switch(mm)
+    {
+        case MultiplicationMethod::school:
+             return "school";
+
+        case MultiplicationMethod::karatsuba:
+             return "karatsuba";
+
+        case MultiplicationMethod::furer:
+             return "furer";
+
+        case MultiplicationMethod::auto_: [[fallthrough]];
+        default:
+             return "auto";
+    }
+
+}
+
+//----------------------------------------------------------------------------
+inline
+const char* BigInt::getMultiplicationMethodName()
+{
+    return getMultiplicationMethodName(s_multiplicationMethod);
+}
 
 //----------------------------------------------------------------------------
 std::string to_string(const BigInt& b)
