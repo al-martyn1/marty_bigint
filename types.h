@@ -34,11 +34,6 @@ namespace marty {
 namespace bigint_details {
 
 
-#if defined(MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE)
-
-    using underlying_unsigned_t   = MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE;
-
-#else
 
     // Мы храним модуль числа в релизе не в векторе, а в std::string
     // В std::string применяется small string optimization оптимизация
@@ -68,54 +63,41 @@ namespace bigint_details {
     // того, что нативно умеет умножаться на платформе. 
 
 
-    #if defined(__cpp_constexpr) && __cpp_constexpr >= 201603
+struct underlying_unsigned
+{
+#if defined(MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE)
+
+    using type = MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE;
+
+#else
+
+    #if defined(_WIN64) || defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(__LP64__)
+        
+        using type = std::uint_fast32_t;
     
-        #if (sizeof(int)==1)
+    #elif !defined(PLATFORM_BITS) && (defined(_WIN32) || defined(__i386__) || defined(__arm__) || defined(__ILP32__))
         
-            using underlying_unsigned_t  = std::uint_fast8_t ;
-        
-        #elif (sizeof(int)==2)
-        
-            using underlying_unsigned_t  = std::uint_fast8_t;
-        
-        #elif (sizeof(int)==4)
-        
-            using underlying_unsigned_t  = std::uint_fast16_t;
-        
-        #else
-        
-            using underlying_unsigned_t = std::uint_fast32_t;
-        
-        #endif
+        using type = std::uint_fast32_t;
     
+    #elif !defined(PLATFORM_BITS) && (defined(__MSDOS__) || defined(__DOS__) || defined(__SMALL__))
+        
+        using type = std::uint_fast16_t ;
+
+    #elif !defined(PLATFORM_BITS) && (defined(__AVR__) || defined(__8051__) || defined(__PIC__))
+        
+        using type = std::uint_fast8_t;
+
     #else
-    
-        #if defined(_WIN64) || defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(__LP64__)
-            
-            using underlying_unsigned_t  = std::uint_fast32_t;
         
-        #elif !defined(PLATFORM_BITS) && (defined(_WIN32) || defined(__i386__) || defined(__arm__) || defined(__ILP32__))
-            
-            using underlying_unsigned_t  = std::uint_fast16_t;
-        
-        #elif !defined(PLATFORM_BITS) && (defined(__MSDOS__) || defined(__DOS__) || defined(__SMALL__))
-            
-            using underlying_unsigned_t  = std::uint_fast8_t ;
-    
-        #elif !defined(PLATFORM_BITS) && (defined(__AVR__) || defined(__8051__) || defined(__PIC__))
-            
-            using underlying_unsigned_t  = std::uint_fast8_t;
-    
-        #else
-            
-            using underlying_unsigned_t  = unsigned;
-    
-        #endif
-    
+        using type = unsigned;
+
     #endif
 
 #endif
 
+}; // struct underlying_unsigned
+
+using underlying_unsigned_t = typename underlying_unsigned::type;
 
 
 //----------------------------------------------------------------------------
