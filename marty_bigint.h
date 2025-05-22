@@ -69,9 +69,10 @@ protected: // member fields
     number_holder_t       m_module;
     int                   m_sign = 0;
 
-    //static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::auto_;
-    //static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::karatsuba;
-    static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::furer;
+    static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::auto_;
+    // static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::school;
+    // static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::karatsuba;
+    // static inline MultiplicationMethod s_multiplicationMethod = MultiplicationMethod::furer;
 
 
 public: // static methods
@@ -174,7 +175,10 @@ protected: // operations implementation helpers
     static void moduleInc(number_holder_t &m);
     static void moduleDec(number_holder_t &m);
 
-    static int moduleCompare(const number_holder_t &m1, number_holder_t m2);
+    // в данном случае - реверсивные значения, сравнение идёт со старших разрядов, от хвоста,
+    // beginIdxM1 >= endIdxM1
+    static int moduleCompare(const number_holder_t &m1, number_holder_t m2, std::size_t beginIdxM1=std::size_t(-1), std::size_t endIdxM1=std::size_t(-1));
+    static bool moduleIsZero(const number_holder_t &m);
 
     static number_holder_t moduleAdd(const number_holder_t &m1, const number_holder_t &m2);
     static void moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, std::size_t b=std::size_t(-1), std::size_t e=std::size_t(-1)); // adds m2 to m1
@@ -185,6 +189,8 @@ protected: // operations implementation helpers
     // m2 - вычитаемое
     // уменьшаемое должно быть больше или равно вычитаемому
     static number_holder_t moduleSub(const number_holder_t& m1, number_holder_t m2);
+    // Вычитаем m2 только из части разрядов модуля m1 - требуется для деления
+    static void moduleSubInplace(number_holder_t& m1, number_holder_t m2, std::size_t beginIdxM1=std::size_t(-1), std::size_t endIdxM1=std::size_t(-1));
 
 
     // Сдвиг влево увеличивает число
@@ -238,6 +244,17 @@ protected: // operations implementation helpers
     static number_holder_t moduleShiftLeftCopy(const number_holder_t &m, int v);
     static number_holder_t moduleShiftRightCopy(const number_holder_t &m, int v);
 
+    static number_holder_t moduleFurerMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleKaratsubaMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleSchoolMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleAutoMul(const number_holder_t &m1, const number_holder_t &m2);
+
+    // Делит m1 на m2, остаток от деления остаётся в m1
+    static number_holder_t moduleSchoolDiv(number_holder_t &m1, number_holder_t m2);
+    BigInt& divImpl(const BigInt &b); // Делит текущий объект на b
+    BigInt& remImpl(const BigInt &b); // получает остаток от деления в текущем объекте (всегда положительный)
+    //static bool moduleIsZero(const number_holder_t &m);
+
 
     // Отрицательная величина сдвига меняет направление сдвига? Или кинуть исключение?
     void shiftLeftImpl(int v);
@@ -270,6 +287,10 @@ protected: // operations implementation helpers
         return res;
     }
 
+
+
+
+
     BigInt& andImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1&i2; } ); checkModuleEmpty(); return *this; }
     BigInt& orImpl (const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1|i2; } ); checkModuleEmpty(); return *this; }
     BigInt& xorImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1^i2; } ); checkModuleEmpty(); return *this; }
@@ -285,10 +306,6 @@ protected: // operations implementation helpers
     int compareImpl(int signOther, const number_holder_t &moduleOther) const;
     int compareImpl(const BigInt& b) const { return compareImpl(b.m_sign, b.m_module); }
 
-    static number_holder_t moduleFurerMul(const number_holder_t &m1, const number_holder_t &m2);
-    static number_holder_t moduleKaratsubaMul(const number_holder_t &m1, const number_holder_t &m2);
-    static number_holder_t moduleSchoolMul(const number_holder_t &m1, const number_holder_t &m2);
-
     BigInt& mulImpl(const BigInt &b);
 
     BigInt& incImpl();
@@ -299,6 +316,13 @@ protected: // ctors
 
     BigInt(int signOther, const number_holder_t &moduleOther)
     : m_module(moduleOther)
+    , m_sign(signOther)
+    {
+        shrinkLeadingZeros();
+    }
+
+    BigInt(int signOther, number_holder_t &&moduleOther)
+    : m_module(std::move(moduleOther))
     , m_sign(signOther)
     {
         shrinkLeadingZeros();
@@ -376,30 +400,37 @@ public: // to string convertion
 
 public: // compare, ==, !=, <, <=, >, >=
 
-    bool operator==(const BigInt &b) const  { return compareImpl(b)==0; }
-    bool operator!=(const BigInt &b) const  { return compareImpl(b)!=0; }
-    bool operator<=(const BigInt &b) const  { return compareImpl(b)<=0; }
-    bool operator< (const BigInt &b) const  { return compareImpl(b)< 0; }
-    bool operator>=(const BigInt &b) const  { return compareImpl(b)>=0; }
-    bool operator> (const BigInt &b) const  { return compareImpl(b)> 0; }
+    bool operator==(const BigInt &b) const    { return compareImpl(b)==0; }
+    bool operator!=(const BigInt &b) const    { return compareImpl(b)!=0; }
+    bool operator<=(const BigInt &b) const    { return compareImpl(b)<=0; }
+    bool operator< (const BigInt &b) const    { return compareImpl(b)< 0; }
+    bool operator>=(const BigInt &b) const    { return compareImpl(b)>=0; }
+    bool operator> (const BigInt &b) const    { return compareImpl(b)> 0; }
 
 
 public: // arithmetic operators '+', '-', '/', '*', ++, --
 
-    BigInt operator+() const                 { return *this; }
+    BigInt operator+() const                  { return *this; }
     BigInt operator-() const                  { return negated(); }
 
     BigInt operator+(const BigInt &b) const   { BigInt res = *this; return res.addImpl(b); }
     BigInt operator-(const BigInt &b) const   { BigInt res = *this; return res.subImpl(b); }
 
-    BigInt& operator+=(const BigInt &b) { return addImpl(b); }
-    BigInt& operator-=(const BigInt &b) { return subImpl(b); }
+    BigInt& operator+=(const BigInt &b)       { return addImpl(b); }
+    BigInt& operator-=(const BigInt &b)       { return subImpl(b); }
 
     BigInt operator*(const BigInt &b) const   { BigInt res = *this; return res.mulImpl(b); }
-    BigInt& operator*=(const BigInt &b) { return mulImpl(b); }
+    BigInt& operator*=(const BigInt &b)       { return mulImpl(b); }
 
-    BigInt& operator++() { incImpl(); return *this; } // увеличивает, и возвращает уменьшенное
-    BigInt& operator--() { decImpl(); return *this; } // уменьшает, и возвращает уменьшенное
+    BigInt operator/(const BigInt &b) const   { BigInt res = *this; return res.divImpl(b); }
+    BigInt& operator/=(const BigInt &b)       { return divImpl(b); }
+
+    BigInt operator%(const BigInt &b) const   { BigInt res = *this; return res.remImpl(b); }
+    BigInt& operator%=(const BigInt &b)       { return remImpl(b); }
+
+
+    BigInt& operator++()    { incImpl(); return *this; } // увеличивает, и возвращает уменьшенное
+    BigInt& operator--()    { decImpl(); return *this; } // уменьшает, и возвращает уменьшенное
     BigInt& operator++(int) { auto res = *this; incImpl(); return res; } // увеличивает, и возвращает исходное
     BigInt& operator--(int) { auto res = *this; decImpl(); return res; } // уменьшает, и возвращает исходное
 
@@ -466,19 +497,42 @@ void BigInt::moduleDec(number_holder_t &m)
 
 //----------------------------------------------------------------------------
 inline
-int BigInt::moduleCompare(const number_holder_t &m1, number_holder_t m2)
+bool BigInt::moduleIsZero(const number_holder_t &m)
 {
-    std::size_t maxSize = std::max(m1.size(), m2.size());
-    for (std::size_t i = maxSize; i-->0;)
+    for(auto &&v : m)
+    {
+        if (v)
+            return false;
+    }
+
+    return true;
+}
+
+//----------------------------------------------------------------------------
+inline
+int BigInt::moduleCompare(const number_holder_t &m1, number_holder_t m2, std::size_t beginIdxM1, std::size_t endIdxM1)
+{
+    if (beginIdxM1>=m1.size())
+        beginIdxM1 = m1.size();
+
+    if (endIdxM1>=m1.size())
+        endIdxM1 = 0;
+
+
+    std::size_t maxSize = std::max(beginIdxM1, m2.size());
+
+    for (std::size_t i=maxSize; i-->endIdxM1;)
     {
         unsigned_t v1 = 0;
         unsigned_t v2 = 0;
 
+        const std::size_t i2 = i - endIdxM1; // beginIdxM1;
+
         if (i<m1.size())
             v1 = m1[i];
     
-        if (i<m2.size())
-            v2 = m2[i];
+        if (i2<m2.size())
+            v2 = m2[i2];
 
         if (v1==v2)
             continue;
@@ -585,11 +639,13 @@ void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, st
         unsigned_t v1 = 0;
         unsigned_t v2 = 0;
 
+        const std::size_t i2 = i - b;
+
         if (i<m1.size())
             v1 = m1[i];
     
-        if (i<m2.size())
-            v2 = m2[i];
+        if (i2<m2.size())
+            v2 = m2[i2];
 
         unsigned_t r = unsigned_t(v1 + v2);
 
@@ -605,10 +661,14 @@ void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, st
         prevOverflow = nextOverflow;
 
         if (i<m1.size())
+        {
             m1[i] = r;
+        }
         else
-            m1.push_back(r);
-    
+        {
+            if (i!=(e-1) || r!=0)
+                m1.push_back(r);
+        }
     }
 
     // if (prevOverflow)
@@ -623,9 +683,61 @@ void BigInt::moduleAddInplace(number_holder_t &m1, const number_holder_t &m2, st
 // m1 - уменьшаемое
 // m2 - вычитаемое
 // уменьшаемое должно быть больше или равно вычитаемому
+void BigInt::moduleSubInplace(number_holder_t& m1, number_holder_t m2, std::size_t beginIdxM1, std::size_t endIdxM1)
+{
+    if (beginIdxM1>=m1.size())
+        beginIdxM1 = 0;
+
+    if (endIdxM1>=m1.size())
+        endIdxM1 = m1.size();
+
+
+    std::size_t maxSize = std::max(endIdxM1, m2.size());
+
+    // number_holder_t res; res.reserve(maxSize);
+    bool prevOverflow = false;
+
+    for(std::size_t i=beginIdxM1; i!=maxSize; ++i)
+    {
+        unsigned_t v1 = 0;
+        unsigned_t v2 = 0;
+
+        const std::size_t i2 = i - beginIdxM1;
+
+        if (i<m1.size())
+            v1 = m1[i];
+    
+        if (i2<m2.size())
+            v2 = m2[i2];
+
+        bool nextOverflow = v1 < v2;
+
+        unsigned_t r = unsigned_t(v1 - v2);
+
+        if (prevOverflow)
+        {
+            if (r==0)
+                nextOverflow = true;
+            --r;
+        }
+
+        prevOverflow = nextOverflow;
+
+        if (i<m1.size())
+            m1[i] = r;
+    
+    }
+}
+
+//----------------------------------------------------------------------------
 inline
 BigInt::number_holder_t BigInt::moduleSub(const number_holder_t &m1, number_holder_t m2)
 {
+    number_holder_t res = m1;
+    moduleSubInplace(res, m2);
+    return res;
+
+#if 0
     std::size_t maxSize = std::max(m1.size(), m2.size());
 
     number_holder_t res; res.reserve(maxSize);
@@ -664,7 +776,7 @@ BigInt::number_holder_t BigInt::moduleSub(const number_holder_t &m1, number_hold
     //     res.emplace_back(unsigned_t(1));
 
     return res;
-
+#endif
 }
 
 //----------------------------------------------------------------------------
@@ -1010,12 +1122,12 @@ BigInt::number_holder_t BigInt::moduleSchoolMul(const number_holder_t &a, const 
             240  6*4
            1800  6*3
           12000  6*2
-          60000
+          60000  6*1
 ---------------
-           3200
-          24000
-         160000
-         800000
+           3200  8*4
+          24000  8*3
+         160000  8*2
+         800000  8*1
 ---------------
 16+120+800+4000+240+1800+12000+60000+3200+24000+160000+800000=1066176
 
@@ -1027,7 +1139,8 @@ BigInt::number_holder_t BigInt::moduleSchoolMul(const number_holder_t &a, const 
     const number_holder_t &m2 = !(a.size()<b.size()) ? a : b;
 
     number_holder_t res; res.resize(m1.size()+m2.size()+1);
-    number_holder_t tmp; tmp.resize(m1.size()+m2.size()+1);
+    //number_holder_t tmp; tmp.resize(m1.size()+m2.size()+1);
+    number_holder_t tmp; tmp.resize(2);
 
     moduleFill(res, 0u);
     moduleFill(tmp, 0u);
@@ -1036,12 +1149,14 @@ BigInt::number_holder_t BigInt::moduleSchoolMul(const number_holder_t &a, const 
     {
         for(std::size_t i2=0; i2!=m2.size(); ++i2)
         {
-            unsigned2_t tmpMul = unsigned2_t(unsigned2_t(m1[i1])*unsigned2_t(m2[i2]));
+            const unsigned2_t m1_i1 = unsigned2_t(m1[i1]);
+            const unsigned2_t m2_i2 = unsigned2_t(m2[i2]);
+            unsigned2_t tmpMul = unsigned2_t(m1_i1*m2_i2);
             const std::size_t idx = i1+i2;
-            tmp[idx  ] = unsigned_t(tmpMul);
-            tmp[idx+1] = unsigned_t((tmpMul>>(sizeof(unsigned_t)*CHAR_BIT)));
-            moduleAddInplace(res, tmp, idx); // adds m2 to m1
-            moduleFill(tmp, 0u, idx, idx+1u);
+            tmp[0] += unsigned_t( tmpMul );
+            tmp[1] += unsigned_t((tmpMul>>(sizeof(unsigned_t)*CHAR_BIT)));
+            moduleAddInplace(res, tmp, idx);
+            moduleFill(tmp, 0u);
         }
     }
 
@@ -1114,7 +1229,8 @@ BigInt::number_holder_t BigInt::moduleFurerMul(const number_holder_t &a, const n
         // tmp.erase(tmp.begin(), tmp.begin()+ptrdiff_t(1));
         // overflow = tmp;
         overflow = convolution[i];
-        overflow.erase(overflow.begin(), overflow.begin()+ptrdiff_t(1));
+        if (!overflow.empty()) // Чёт я уже подзабыл, нафига я это сделал, надо было прокоментить
+            overflow.erase(overflow.begin(), overflow.begin()+ptrdiff_t(1));
 
         // if (convolution[i].size()>1)
         //     overflow = convolution[i][1];
@@ -1146,7 +1262,10 @@ BigInt::number_holder_t BigInt::moduleFurerMul(const number_holder_t &a, const n
 inline
 BigInt::number_holder_t BigInt::moduleKaratsubaMul(const number_holder_t &a, const number_holder_t &b)
 {
-    if ((a.size()+b.size()) <= 4)
+    // std::size_t size = m1.size()+m2.size();
+    std::size_t size = std::min(a.size(),b.size());
+    // if ((a.size()+b.size()) <= 4)
+    if (size<=2)
        return moduleSchoolMul(a, b);
 
     auto mid  = std::max(a.size(), b.size())/2u;
@@ -1173,24 +1292,21 @@ BigInt::number_holder_t BigInt::moduleKaratsubaMul(const number_holder_t &a, con
 
 }
 
-#if 0
+//----------------------------------------------------------------------------
 inline
-BigInt karatsuba_mul(const BigInt& a, const BigInt& b)
+BigInt::number_holder_t BigInt::moduleAutoMul(const number_holder_t &m1, const number_holder_t &m2)
 {
-    size_t m = std::max(a.modules.size(), b.modules.size())/2;
-    
-    BigInt low1(a.modules.begin(), a.modules.begin() + m);
-    BigInt high1(a.modules.begin() + m, a.modules.end());
-    BigInt low2(b.modules.begin(), b.modules.begin() + m);
-    BigInt high2(b.modules.begin() + m, b.modules.end());
-    
-    BigInt z0 = karatsuba_mul(low1, low2);
-    BigInt z1 = karatsuba_mul(low1 + high1, low2 + high2);
-    BigInt z2 = karatsuba_mul(high1, high2);
-    
-    return (z2 << (2*m)) + ((z1 - z2 - z0) << m) + z0;
+    // std::size_t size = m1.size()+m2.size();
+    std::size_t size = std::min(m1.size(),m2.size());
+    //if (size<12)
+    if (size<6)
+        return moduleSchoolMul(m1, m2);
+    //else if (size<100)
+    else if (size<50)
+        return moduleFurerMul(m1, m2);
+    else
+        return moduleKaratsubaMul(m1, m2);
 }
-#endif
 
 //----------------------------------------------------------------------------
 inline
@@ -1202,10 +1318,6 @@ BigInt& BigInt::mulImpl(const BigInt &b)
         m_module.clear();
         return *this;
     }
-
-    // Наверное, тут надо проверять размеры модулей и возможно, для длинных модулей использовать алгоритм Фюрера
-    // Потом, когда-нибудь, реализую Фюрера, а также обычное умножение столбиком,
-    // и проверю, какой алгоритм на каких числах работает лучше.
 
     switch(s_multiplicationMethod)
     {
@@ -1223,8 +1335,9 @@ BigInt& BigInt::mulImpl(const BigInt &b)
 
         case MultiplicationMethod::auto_: [[fallthrough]];
         default:
-             //if ((a.size()+b.size()) < 4)
-             m_module = moduleSchoolMul(m_module, b.m_module);
+             {
+                 m_module = moduleAutoMul(m_module, b.m_module);
+             }
     }
 
     return *this;
@@ -1257,6 +1370,114 @@ inline
 const char* BigInt::getMultiplicationMethodName()
 {
     return getMultiplicationMethodName(s_multiplicationMethod);
+}
+
+//----------------------------------------------------------------------------
+// Делит m1 на m2, остаток от деления остаётся в m1
+// static number_holder_t moduleSchoolDiv(number_holder_t &m1, const number_holder_t &m2);
+// static bool moduleIsZero(const number_holder_t &m);
+// static int moduleCompare(const number_holder_t &m1, number_holder_t m2, std::size_t beginIdxM1=std::size_t(-1), std::size_t endIdxM1=std::size_t(-1));
+inline
+BigInt::number_holder_t BigInt::moduleSchoolDiv(number_holder_t &m1, number_holder_t m2)
+{
+    shrinkLeadingZeros(m1);
+    if (m1.empty())
+        return m1;
+
+    shrinkLeadingZeros(m2);
+
+    if (moduleIsZero(m2))
+        throw std::overflow_error("BigInt: division by zero");
+
+    // Проверяем, что m1 < m2. Если да, результат 0, остаток m1.
+    if (moduleCompare(m1, m2) < 0)
+    {
+        return number_holder_t(); // Возвращаем 0
+    }
+
+    std::size_t nShift = m1.size() - m2.size() + 1u;
+
+    // reverse result
+    number_holder_t rRes; rRes.reserve(nShift);
+
+    while(nShift-->0)
+    {
+        const std::size_t idxM1 = m2.size()+nShift-1u;
+        unsigned2_t h1 = unsigned2_t(m1[idxM1]);
+        if ((idxM1+1)<m1.size())
+        {
+            unsigned_t h1_2 = m1[idxM1+1];
+            h1 += unsigned2_t(unsigned2_t(h1_2)<<((sizeof(unsigned2_t)/2)*CHAR_BIT));
+        }
+        const unsigned2_t h2 = unsigned2_t(m2.back());
+        unsigned_t qHat = unsigned_t(h1/h2); // back - m2[m2.size()-1] - старшая часть
+        if (qHat)
+        {
+            number_holder_t sub = moduleAutoMul(m2, number_holder_t(1, qHat));
+            std::size_t nShiftEnd = nShift+m2.size()+1;
+            int cmpRes = moduleCompare(m1, sub, nShiftEnd, nShift);
+            while(qHat && cmpRes<0)
+            {
+                --qHat;
+                moduleSubInplace(sub, m2);
+                cmpRes = moduleCompare(m1, sub, nShiftEnd, nShift);
+            }
+
+            rRes.push_back(qHat);
+
+            moduleSubInplace(m1, sub, nShift, nShiftEnd);
+        }
+        else
+        {
+            rRes.push_back(0);
+        }
+
+    }
+
+    std::reverse(rRes.begin(), rRes.end());
+    shrinkLeadingZeros(rRes);
+
+    return rRes;
+
+}
+//----------------------------------------------------------------------------
+inline
+BigInt& BigInt::divImpl(const BigInt &b) // Делит текущий объект на b
+{
+    if (b.m_sign==0)
+        throw std::overflow_error("BigInt: division by zero");
+
+    m_sign = m_sign*b.m_sign;
+    if (m_sign==0)
+    {
+        m_module.clear();
+        return *this;
+    }
+
+    m_module = moduleSchoolDiv(m_module, b.m_module);
+    shrinkLeadingZeros();
+
+    return *this;
+}
+//----------------------------------------------------------------------------
+inline
+BigInt& BigInt::remImpl(const BigInt &b)
+{
+    if (b.m_sign==0)
+        throw std::overflow_error("BigInt: division by zero");
+
+    // m_sign = m_sign*b.m_sign;
+    if (m_sign==0)
+    {
+        m_module.clear();
+        return *this;
+    }
+
+    // m_sign = 1; // Для остатка - всегда + (или нет?)
+    moduleSchoolDiv(m_module, b.m_module);
+    shrinkLeadingZeros();
+
+    return *this;
 }
 
 //----------------------------------------------------------------------------
