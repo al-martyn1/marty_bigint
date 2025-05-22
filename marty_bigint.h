@@ -1299,13 +1299,14 @@ BigInt::number_holder_t BigInt::moduleAutoMul(const number_holder_t &m1, const n
     // std::size_t size = m1.size()+m2.size();
     std::size_t size = std::min(m1.size(),m2.size());
     //if (size<12)
-    if (size<6)
+    if (size<=6)
         return moduleSchoolMul(m1, m2);
-    //else if (size<100)
-    else if (size<50)
-        return moduleFurerMul(m1, m2);
-    else
-        return moduleKaratsubaMul(m1, m2);
+    // //else if (size<100)
+    // else if (size<50)
+    //     return moduleFurerMul(m1, m2);
+    // else
+    //     return moduleKaratsubaMul(m1, m2);
+    return moduleFurerMul(m1, m2);
 }
 
 //----------------------------------------------------------------------------
