@@ -9,6 +9,8 @@
 //
 #include <cstdint>
 #include <type_traits>
+#include <limits>
+#include <typeinfo>
 
 //
 #include "undef_min_max.h"
@@ -193,6 +195,34 @@ IntType shiftBitsToHigh(IntType val)
 
     return static_cast<IntType>( val << ((sizeof(IntType)*CHAR_BIT)-size) );
 }
+
+//----------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------
+template < typename T
+         , std::enable_if_t< std::is_integral_v<T>, int> = 0
+         >
+constexpr
+int getTypeDecimalDigits()
+{
+    return int(std::numeric_limits<T>::digits10);
+}
+
+inline
+unsigned getPower10(int p)
+{
+    unsigned res = 1;
+    for(; p>0; --p)
+       res *= 10;
+
+    return res;
+}
+
+//----------------------------------------------------------------------------
+
+
 
 //----------------------------------------------------------------------------
 

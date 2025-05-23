@@ -386,6 +386,12 @@ constexpr auto high_bits_mask() {
     }
 }
 
+template<typename T>
+void printDigits10()
+{
+    std::cout << "Digits10 for " << typeid(T).name() << ": " << std::numeric_limits<T>::digits10 << "\n";
+}
+
 int unsafeMain(int argc, char* argv[])
 {
 
@@ -408,6 +414,15 @@ int unsafeMain(int argc, char* argv[])
     std::cout << "BigInt chunk size: " << sizeof(marty::BigInt::chunk_type) << "\n" << std::flush;
     std::cout << "-------------------------\n\n" << std::flush;
 
+    printDigits10<std::uint8_t>();   // 0xFF               - 255                  -  2
+    printDigits10<std::uint16_t>();  // 0xFFFF             - 65536                -  4
+    printDigits10<std::uint32_t>();  // 0xFFFFFFFF         - 4294967295           -  9
+    printDigits10<std::uint64_t>();  // 0xFFFFFFFFFFFFFFFF - 18446744073709551615 - 19
+
+    std::cout << "\n" << std::flush;
+
+
+
     // marty::BigInt bi = -1;
     // bi <<= 23;
 
@@ -415,6 +430,11 @@ int unsafeMain(int argc, char* argv[])
     // bi *= 2;
 
     using marty::BigInt;
+
+    marty::BigInt biE = marty::BigInt(2718121812459045ull);
+    std::cout << "BigInt(2718121812459045): " << to_string(biE) << "\n" << std::flush;
+    std::cout << "\n" << std::flush;
+
 
     BigInt bi = BigInt(0); 
     std::string biStr;

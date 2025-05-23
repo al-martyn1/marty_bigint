@@ -251,6 +251,7 @@ protected: // operations implementation helpers
 
     // Делит m1 на m2, остаток от деления остаётся в m1
     static number_holder_t moduleSchoolDiv(number_holder_t &m1, number_holder_t m2);
+    static number_holder_t moduleDiv(number_holder_t &m1, number_holder_t m2) { return moduleSchoolDiv(m1, m2); }
     BigInt& divImpl(const BigInt &b); // Делит текущий объект на b
     BigInt& remImpl(const BigInt &b); // получает остаток от деления в текущем объекте (всегда положительный)
     //static bool moduleIsZero(const number_holder_t &m);
@@ -356,46 +357,8 @@ public: // to integer convertion
 
 public: // to string convertion
 
-    std::string toString() const
-    {
-        // Временная реализация, используем std::uint64_t и реально длинные числа форматировать не можем
-
-        constexpr const std::size_t unsigned_t_bits = sizeof(unsigned_t)*CHAR_BIT;
-
-        std::uint64_t val = 0;
-        
-        for(std::size_t i=0; i!=m_module.size(); ++i)
-        {
-            auto nShift = unsigned_t_bits*i;
-            if (nShift>=64)
-                break;
-
-            std::uint64_t tmp = std::uint64_t(m_module[i]);
-            tmp <<= nShift;
-            val |= tmp;
-        }
-
-/*
-#if defined(__GNUC__) && (__GNUC__ < 11)
-        std::ostringstream oss;
-        //oss << std::hex;
-        oss << val;
-        return oss.str();
-#else
-        char buf[64];
-        auto result = std::to_chars(&buf[0], &buf[64], val, fmt, precision);
-*/
-
-        return std::string(m_sign<0 ? 1u : 0u, '-') + std::to_string(val);
-
-    }
-
+    std::string toString() const;
     std::string to_string() const { return toString(); }
-
-    // operator std::string() const
-    // {
-    //     return toString();
-    // }
 
 
 public: // compare, ==, !=, <, <=, >, >=
@@ -1455,7 +1418,7 @@ BigInt& BigInt::divImpl(const BigInt &b) // Делит текущий объек
         return *this;
     }
 
-    m_module = moduleSchoolDiv(m_module, b.m_module);
+    m_module = moduleDiv(m_module, b.m_module);
     shrinkLeadingZeros();
 
     return *this;
@@ -1475,11 +1438,84 @@ BigInt& BigInt::remImpl(const BigInt &b)
     }
 
     // m_sign = 1; // Для остатка - всегда + (или нет?)
-    moduleSchoolDiv(m_module, b.m_module);
+    moduleDiv(m_module, b.m_module);
     shrinkLeadingZeros();
 
     return *this;
 }
+
+//----------------------------------------------------------------------------
+std::string BigInt::toString() const
+{
+    if (m_sign==0)
+        return std::string(1, '0');
+
+    number_holder_t module10;
+
+    const int chunkPwr10 = bigint_utils::getTypeDecimalDigits<unsigned_t>();
+    const BigInt biDividerMod10 = bigint_utils::getPower10(chunkPwr10);
+
+    number_holder_t rem = m_module;
+    while(true)
+    {
+        auto nextModule = moduleDiv(rem, biDividerMod10.m_module);
+        shrinkLeadingZeros(nextModule);
+        shrinkLeadingZeros(rem);
+
+        if (rem.size()>1)
+            throw std::runtime_error("BigInt::toString(): something goes wrong");
+
+        if (rem.empty())
+            module10.push_back(0u);
+        else
+            module10.push_back(rem.front());
+
+        if (nextModule.empty())
+            break;
+
+        rem = nextModule;
+    }
+
+    // 2718121812459045
+    // 2718121812459045 % 100 = 45
+    // 27181218124590   % 100 = 90
+    // 271812181245     % 100 = 45
+    // 2718121812       % 100 = 12
+    // 27181218         % 100 = 18
+    // 271812           % 100 = 12
+    // 2718             % 100 = 18
+    // 27               % 100 = 27
+
+    // У нас остатки от деления на 10^N, начиная с младших разрядов
+
+    std::string resStr; resStr.reserve(std::size_t(chunkPwr10)*module10.size());
+
+    for(auto r10: module10)
+    {
+        for(int i=0; i!=chunkPwr10; ++i)
+        {
+            resStr.append(1, char('0' + int(r10%10)));
+            r10 /= 10;
+        }
+    }
+
+    while(!resStr.empty() && resStr.back()=='0')
+        resStr.pop_back();
+
+    if (resStr.empty())
+        resStr.append(1, '0');
+    
+    if (m_sign<0)
+        resStr.append(1, '-');
+
+    std::reverse(resStr.begin(), resStr.end());
+
+    return resStr;
+}
+
+//----------------------------------------------------------------------------
+
+
 
 //----------------------------------------------------------------------------
 std::string to_string(const BigInt& b)
