@@ -288,10 +288,6 @@ protected: // operations implementation helpers
         return res;
     }
 
-
-
-
-
     BigInt& andImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1&i2; } ); checkModuleEmpty(); return *this; }
     BigInt& orImpl (const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1|i2; } ); checkModuleEmpty(); return *this; }
     BigInt& xorImpl(const BigInt &other) { m_module = moduleBitOpImpl(m_module, other.m_module   , [](auto i1, auto i2) { return i1^i2; } ); checkModuleEmpty(); return *this; }
@@ -359,6 +355,14 @@ public: // to string convertion
 
     std::string toString() const;
     std::string to_string() const { return toString(); }
+
+
+protected: // to integral type convertion helpers
+
+    bool moduleToIntegralConvertionHelper(std::uint64_t &t) const;
+
+
+protected: // to integral type convertion operators
 
 
 public: // compare, ==, !=, <, <=, >, >=
@@ -1511,6 +1515,38 @@ std::string BigInt::toString() const
     std::reverse(resStr.begin(), resStr.end());
 
     return resStr;
+}
+
+//----------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------
+bool BigInt::moduleToIntegralConvertionHelper(std::uint64_t &t) const
+{
+    t = 0;
+
+    auto module = m_module;
+    shrinkLeadingZeros(module);
+    if (module.empty())
+        return true; // валидный ноль
+
+    const auto maxShiftBitsValue  = int(sizeof(t)*CHAR_BIT);
+
+    const auto shiftBitsStepValue = int(sizeof(unsigned_t)*CHAR_BIT);
+
+    for(std::size_t idx=0u; idx!=module.size(); ++idx)
+    {
+        const auto curShift = int(shiftBitsStepValue*idx);
+        if (curShift>=maxShiftBitsValue)
+            return false; // ненулевое значение (а нулевых ведущих у нас нет) сдвигаем за пределы целевого типа - конвертация прошла с усечением.
+
+        const std::uint64_t mi = std::uint64_t(module[idx]); // очередная часть
+        const std::uint64_t miShifted = std::uint64_t(mi<<curShift);
+        t |= miShifted;
+    }
+
+    return true; // текущий модуль влез в целевое значение
 }
 
 //----------------------------------------------------------------------------
