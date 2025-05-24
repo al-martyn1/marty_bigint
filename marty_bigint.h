@@ -348,7 +348,63 @@ public: // misc methods
     }
 
 
-public: // to integer convertion
+protected: // to integral type convertion helpers
+
+    bool moduleToIntegralConvertionHelper(std::uint64_t &t) const;
+    bool moduleToIntegralConvertionHelper(std::int64_t  &t) const;
+
+
+public: // to integral convertion
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    operator T() const
+    {
+        if constexpr (std::is_signed_v<T>)
+        {
+            std::int64_t t = 0;
+            moduleToIntegralConvertionHelper(t);
+            return T(t);
+        }
+        else
+        {
+            std::uint64_t t = 0;
+            moduleToIntegralConvertionHelper(t);
+            return T(t);
+        }
+    }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    T checkedConvert(bool *pValid=0) const
+    {
+        if (pValid)
+            *pValid = true;
+
+        if constexpr (std::is_signed_v<T>)
+        {
+            std::int64_t t = 0;
+            moduleToIntegralConvertionHelper(t);
+            if (pValid)
+            {
+                if (t > std::int64_t(std::numeric_limits<T>::max()))
+                   *pValid = false;
+            }
+            return T(t);
+        }
+        else
+        {
+            std::uint64_t t = 0;
+            moduleToIntegralConvertionHelper(t);
+            if (pValid)
+            {
+                if (t > std::uint64_t(std::numeric_limits<T>::max()))
+                   *pValid = false;
+                else if (t < std::uint64_t(std::numeric_limits<T>::min()))
+                   *pValid = false;
+            }
+            return T(t);
+        }
+    
+    }
 
 
 public: // to string convertion
@@ -357,12 +413,9 @@ public: // to string convertion
     std::string to_string() const { return toString(); }
 
 
-protected: // to integral type convertion helpers
+public: // to integral type convertion operators
 
-    bool moduleToIntegralConvertionHelper(std::uint64_t &t) const;
-
-
-protected: // to integral type convertion operators
+    operator std::uint64_t() const    { std::uint64_t t = 0; moduleToIntegralConvertionHelper(t); return t; }
 
 
 public: // compare, ==, !=, <, <=, >, >=
@@ -373,6 +426,24 @@ public: // compare, ==, !=, <, <=, >, >=
     bool operator< (const BigInt &b) const    { return compareImpl(b)< 0; }
     bool operator>=(const BigInt &b) const    { return compareImpl(b)>=0; }
     bool operator> (const BigInt &b) const    { return compareImpl(b)> 0; }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator==(T t) const { return operator==(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator!=(T t) const { return operator!=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator<=(T t) const { return operator<=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator< (T t) const { return operator< (BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator>=(T t) const { return operator>=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    bool operator> (T t) const { return operator> (BigInt(t)); }
 
 
 public: // arithmetic operators '+', '-', '/', '*', ++, --
@@ -387,12 +458,11 @@ public: // arithmetic operators '+', '-', '/', '*', ++, --
     BigInt& operator-=(const BigInt &b)       { return subImpl(b); }
 
     BigInt operator*(const BigInt &b) const   { BigInt res = *this; return res.mulImpl(b); }
-    BigInt& operator*=(const BigInt &b)       { return mulImpl(b); }
-
     BigInt operator/(const BigInt &b) const   { BigInt res = *this; return res.divImpl(b); }
-    BigInt& operator/=(const BigInt &b)       { return divImpl(b); }
-
     BigInt operator%(const BigInt &b) const   { BigInt res = *this; return res.remImpl(b); }
+
+    BigInt& operator*=(const BigInt &b)       { return mulImpl(b); }
+    BigInt& operator/=(const BigInt &b)       { return divImpl(b); }
     BigInt& operator%=(const BigInt &b)       { return remImpl(b); }
 
 
@@ -400,6 +470,38 @@ public: // arithmetic operators '+', '-', '/', '*', ++, --
     BigInt& operator--()    { decImpl(); return *this; } // уменьшает, и возвращает уменьшенное
     BigInt& operator++(int) { auto res = *this; incImpl(); return res; } // увеличивает, и возвращает исходное
     BigInt& operator--(int) { auto res = *this; decImpl(); return res; } // уменьшает, и возвращает исходное
+
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator+(T t) const { return operator+(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator-(T t) const { return operator-(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator*(T t) const { return operator*(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator/(T t) const { return operator/(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator%(T t) const { return operator%(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator+=(T t) const { return operator+=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator-=(T t) const { return operator-=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator*=(T t) const { return operator*=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator/=(T t) const { return operator/=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator%=(T t) const { return operator%=(BigInt(t)); }
+
 
 
 public: // logical operators
@@ -411,9 +513,10 @@ public: // logical operators
 public: // shifts
 
     BigInt  operator<< (int v) const { auto tmp = *this; tmp.shiftLeftImpl(v); return tmp; }
-    BigInt& operator<<=(int v)       { shiftLeftImpl(v); return *this; }
     BigInt  operator>> (int v) const { auto tmp = *this; tmp.shiftRightImpl(v); return tmp; }
+
     BigInt& operator>>=(int v)       { shiftRightImpl(v); return *this; }
+    BigInt& operator<<=(int v)       { shiftLeftImpl(v); return *this; }
 
 public: // bit ops
 
@@ -427,6 +530,23 @@ public: // bit ops
 
     BigInt  operator~ () const                { auto tmp = *this; tmp.invImpl(); return tmp; }
 
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator&(T t) const { return operator&(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator|(T t) const { return operator|(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt operator^(T t) const { return operator^(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator&=(T t) const { return operator&=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator|=(T t) const { return operator|=(BigInt(t)); }
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    BigInt& operator^=(T t) const { return operator^=(BigInt(t)); }
 
 }; // class BigInt
 
@@ -1449,6 +1569,7 @@ BigInt& BigInt::remImpl(const BigInt &b)
 }
 
 //----------------------------------------------------------------------------
+inline
 std::string BigInt::toString() const
 {
     if (m_sign==0)
@@ -1522,9 +1643,13 @@ std::string BigInt::toString() const
 
 
 //----------------------------------------------------------------------------
+inline
 bool BigInt::moduleToIntegralConvertionHelper(std::uint64_t &t) const
 {
     t = 0;
+
+    if (!m_sign)
+        return true; // валидный ноль
 
     auto module = m_module;
     shrinkLeadingZeros(module);
@@ -1550,15 +1675,91 @@ bool BigInt::moduleToIntegralConvertionHelper(std::uint64_t &t) const
 }
 
 //----------------------------------------------------------------------------
+inline
+bool BigInt::moduleToIntegralConvertionHelper(std::int64_t &t) const
+{
+    t = 0;
 
+    if (!m_sign)
+        return true; // валидный ноль
+
+    std::uint64_t t_ = 0;
+    if (!moduleToIntegralConvertionHelper(t_))
+    {
+        // У нас не влезло даже в uint64_t
+        if (m_sign<0)
+            t = ~std::int64_t(t_) + std::int64_t(1);
+        else
+            t = std::int64_t(t_);
+        return false;
+    }
+
+    constexpr const auto int64_max = std::numeric_limits<std::int64_t>::max();
+    constexpr const auto uint64_int64_max = static_cast<std::uint64_t>(int64_max);
+    constexpr const auto uint64_int64_min_abs = static_cast<std::uint64_t>(int64_max) + 1;
+
+    if (m_sign<0)
+    {
+        t = - std::int64_t(t_);
+        return t_ <= uint64_int64_min_abs;
+    }
+
+    t = std::int64_t(t_);
+    return t_ <= uint64_int64_max;
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator==(T t, const BigInt &b) { return BigInt(t).operator==(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator!=(T t, const BigInt &b) { return BigInt(t).operator!=(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator<=(T t, const BigInt &b) { return BigInt(t).operator<=(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator< (T t, const BigInt &b) { return BigInt(t).operator< (b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator>=(T t, const BigInt &b) { return BigInt(t).operator>=(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+bool operator> (T t, const BigInt &b) { return BigInt(t).operator> (b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator+(T t, const BigInt &b) { return BigInt(t).operator+(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator-(T t, const BigInt &b) { return BigInt(t).operator-(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator*(T t, const BigInt &b) { return BigInt(t).operator*(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator/(T t, const BigInt &b) { return BigInt(t).operator/(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator%(T t, const BigInt &b) { return BigInt(t).operator%(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator&(T t, const BigInt &b) { return BigInt(t).operator&(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator|(T t, const BigInt &b) { return BigInt(t).operator|(b); }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+BigInt operator^(T t, const BigInt &b) { return BigInt(t).operator^(b); }
 
 
 //----------------------------------------------------------------------------
+inline
 std::string to_string(const BigInt& b)
 {
     return b.toString();
 }
 
+//----------------------------------------------------------------------------
 
 
 //----------------------------------------------------------------------------

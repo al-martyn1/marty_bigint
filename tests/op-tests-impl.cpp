@@ -423,6 +423,9 @@ int unsafeMain(int argc, char* argv[])
 
 
 
+    // Добавить тест на переполнение - сложить два минимальных int64_t, сложить их же 
+    // как BigInt, потом преобразовать обратно в int64_t и сравнить с оригиналом
+
     // marty::BigInt bi = -1;
     // bi <<= 23;
 
@@ -439,7 +442,25 @@ int unsafeMain(int argc, char* argv[])
     BigInt bi = BigInt(0); 
     std::string biStr;
 
-    BigInt::setMultiplicationMethod(BigInt::MultiplicationMethod::school);
+    std::int64_t int64_max = std::numeric_limits<std::int64_t>::max();
+    std::int64_t int64_min = std::numeric_limits<std::int64_t>::min();
+
+    BigInt int64_max_bi = int64_max;
+    BigInt int64_min_bi = int64_min;
+
+    std::int64_t int64_max2 = int64_max + int64_max;
+    std::int64_t int64_min2 = int64_min + int64_min;
+
+    BigInt int64_max2_bi = int64_max_bi + int64_max_bi;
+    BigInt int64_min2_bi = int64_min_bi + int64_min_bi;
+
+    if (int64_max2!=std::int64_t(int64_max2_bi))
+        std::cout << "Overflow not match\n" << std::flush;
+
+    if (int64_min2!=std::int64_t(int64_min2_bi))
+        std::cout << "Underflow not match\n" << std::flush;
+
+    // BigInt::setMultiplicationMethod(BigInt::MultiplicationMethod::school);
 
     // bi = BigInt(0x1234) * marty::BigInt(4);
     // biStr = to_string(bi);
