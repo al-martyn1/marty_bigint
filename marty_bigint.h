@@ -20,6 +20,11 @@
 
 #endif
 
+#if (__cplusplus>=202002L)
+    #include <compare>
+#endif
+
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -382,7 +387,12 @@ public: // to integral convertion
         if constexpr (std::is_signed_v<T>)
         {
             std::int64_t t = 0;
-            moduleToIntegralConvertionHelper(t);
+
+            if (!moduleToIntegralConvertionHelper(t))
+            {
+                if (pValid)
+                    *pValid = false;
+            }
             if (pValid)
             {
                 if (t > std::int64_t(std::numeric_limits<T>::max()))
@@ -393,7 +403,11 @@ public: // to integral convertion
         else
         {
             std::uint64_t t = 0;
-            moduleToIntegralConvertionHelper(t);
+            if (!moduleToIntegralConvertionHelper(t))
+            {
+                if (pValid)
+                    *pValid = false;
+            }
             if (pValid)
             {
                 if (t > std::uint64_t(std::numeric_limits<T>::max()))
@@ -416,9 +430,26 @@ public: // to string convertion
 public: // to integral type convertion operators
 
     operator std::uint64_t() const    { std::uint64_t t = 0; moduleToIntegralConvertionHelper(t); return t; }
+    operator std::int64_t() const     { std::int64_t  t = 0; moduleToIntegralConvertionHelper(t); return t; }
 
 
 public: // compare, ==, !=, <, <=, >, >=
+
+#if (__cplusplus>=202002L)
+
+    // https://en.cppreference.com/w/cpp/language/operator_comparison#Three-way_comparison
+    // https://en.cppreference.com/w/cpp/utility/compare/strong_ordering.html
+
+    std::strong_ordering operator<=>(const BigInt &b) const
+    {
+         auto cmpRes = compareImpl(b);
+         if (!cmpRes)
+             return std::strong_ordering::equal;
+
+         return (cmpRes<0) ? std::strong_ordering::less : std::strong_ordering::greater;
+    }
+
+#endif
 
     bool operator==(const BigInt &b) const    { return compareImpl(b)==0; }
     bool operator!=(const BigInt &b) const    { return compareImpl(b)!=0; }
@@ -426,6 +457,13 @@ public: // compare, ==, !=, <, <=, >, >=
     bool operator< (const BigInt &b) const    { return compareImpl(b)< 0; }
     bool operator>=(const BigInt &b) const    { return compareImpl(b)>=0; }
     bool operator> (const BigInt &b) const    { return compareImpl(b)> 0; }
+
+#if (__cplusplus>=202002L)
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    std::strong_ordering operator<=>(T t) const { return operator<=>(BigInt(t)); }
+
+#endif
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
     bool operator==(T t) const { return operator==(BigInt(t)); }
@@ -1709,6 +1747,13 @@ bool BigInt::moduleToIntegralConvertionHelper(std::int64_t &t) const
 }
 
 //----------------------------------------------------------------------------
+#if (__cplusplus>=202002L)
+
+    template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    std::strong_ordering operator<=>(T t, const BigInt &b) const { return BigInt(t).operator<=>(b); }
+
+#endif
+
 template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
 bool operator==(T t, const BigInt &b) { return BigInt(t).operator==(b); }
 
