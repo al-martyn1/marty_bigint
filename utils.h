@@ -385,6 +385,12 @@ inline constexpr char digitToChar(int d, bool bUpper)
 }
 
 //----------------------------------------------------------------------------
+inline constexpr char digitToChar(unsigned d, bool bUpper)
+{
+    return d<10 ? details::digitToCharDec(int(d)) : details::digitToCharAlpha(int(d-10), bUpper);
+}
+
+//----------------------------------------------------------------------------
 
 
 
