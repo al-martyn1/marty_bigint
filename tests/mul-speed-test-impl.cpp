@@ -53,13 +53,14 @@ struct TickElapsedPrinter
 {
     std::uint32_t  startTick = 0;
     std::string    msg;
+    bool           bCerr = false;
 
-    TickElapsedPrinter(const std::string &m) : startTick(getMillisecTick()), msg(m) {}
+    TickElapsedPrinter(const std::string &m, bool be=true) : startTick(getMillisecTick()), msg(m), bCerr(be) {}
     ~TickElapsedPrinter()
     {
         //#if defined(DEBUG) || defined(_DEBUG)
         if (!msg.empty())
-            std::cout << msg << ": " << (getMillisecTick()-startTick) << "\n" << std::flush;
+            (bCerr?std::cerr:std::cout) << msg << ": " << (getMillisecTick()-startTick) << "\n" << std::flush;
         //#else
         //std::cout << "+" << std::flush;
         //#endif
@@ -162,6 +163,20 @@ int unsafeMain(int argc, char* argv[])
         std::cout << "-------------------------\n\n" << std::flush;
     }
 
+    #if defined(WIN32) || defined(_WIN32)
+        #if defined(WIN64) || defined(_WIN64)
+            std::cerr<<"Platform: x64" << std::endl << std::flush;
+        #else
+            std::cerr<<"Platform: x86" << std::endl << std::flush;
+        #endif
+    #else
+            std::cerr<<"Platform: unknown" << std::endl << std::flush;
+    #endif
+
+    std::cerr << "BigInt chunk size: " << sizeof(marty::BigInt::chunk_type) << "\n" << std::flush;
+    std::cerr << "-------------------------\n\n" << std::flush;
+
+
     for(std::size_t i=0u; i!=numInputs; ++i)
         baseVals1.emplace_back(std::rand());
 
@@ -188,9 +203,9 @@ int unsafeMain(int argc, char* argv[])
 
 
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#1");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back(((baseVals1[i]+baseVals2[i])<<16)+baseVals3[i]);
@@ -202,9 +217,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#2");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back(((vals[1][i]+baseVals2[i]<<32)+(baseVals3[i]<<16)+baseVals1[i]));
@@ -216,9 +231,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#3");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[2][i]<<(std::rand()%0x3F+0x3F)) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -231,9 +246,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#4");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[3][i]<<(std::rand()%0x3F+0x3F)) + (baseVals2[i])+(baseVals3[i]<<6)+(baseVals1[i]<<12));
@@ -247,9 +262,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#5");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[4][i]<<(std::rand()%0x3F+0x3F)) + (baseVals3[i])+(baseVals1[i]<<6)+(baseVals2[i]<<12));
@@ -263,9 +278,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#6");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[5][i]<<512) + vals[4][i] + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -278,9 +293,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#7");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[6][i]<<512) + vals[5][i] + (baseVals2[i])+(baseVals3[i]<<6)+(baseVals1[i]<<12));
@@ -293,9 +308,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#8");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[7][i]<<512) + vals[6][i] + (baseVals3[i])+(baseVals1[i]<<6)+(baseVals2[i]<<12));
@@ -307,9 +322,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#9");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[8][i]<<512) + vals[7][i] + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -321,9 +336,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#10");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[9][i]<<512) + vals[8][i] + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -336,9 +351,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#11");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[10][i]<<512) + vals[9][i] + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -351,9 +366,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#12");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[11][i]<<1024) + (vals[10][i]<<512) + (vals[9][i]<<256) + (vals[8][i]<<64) + (vals[7][i]<<24) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -366,9 +381,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#13");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[12][i]<<2048) + (vals[11][i]<<1024) + (vals[10][i]<<512) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -381,9 +396,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#14");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[13][i]<<4096) + (vals[12][i]<<2048) + (vals[11][i]<<1024) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -396,9 +411,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#15");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[14][i]<<8192) + (vals[13][i]<<4096) + (vals[12][i]<<2048) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -411,9 +426,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#16");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[15][i]<<16384) + (vals[14][i]<<8192) + (vals[13][i]<<4096) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -425,9 +440,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#17");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[16][i]<<32768) + (vals[15][i]<<16384) + (vals[14][i]<<8192) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -440,9 +455,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#18");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[17][i]<<65536) + (vals[16][i]<<32768) + (vals[15][i]<<16384) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -454,9 +469,9 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout /*<< "\n"*/ << std::flush;
     {
-        #if defined(DEBUG) || defined(_DEBUG)
+        //#if defined(DEBUG) || defined(_DEBUG)
         auto tkprn = TickElapsedPrinter("#19");
-        #endif
+        //#endif
         std::vector<BigInt> v;
         for(std::size_t i=0u; i!=numInputs; ++i)
             v.emplace_back((vals[18][i]<<131072) + (vals[17][i]<<65536) + (vals[16][i]<<32768) + (baseVals1[i])+(baseVals2[i]<<6)+(baseVals3[i]<<12));
@@ -471,7 +486,7 @@ int unsafeMain(int argc, char* argv[])
         std::cout << "\n\n" << std::flush;
     }
 
-    auto totalTicksCounter = TickElapsedPrinter(bCsv ? std::string() : std::string("Total elapsed"));
+    auto totalTicksCounter = TickElapsedPrinter(bCsv ? std::string() : std::string("Total elapsed"), false);
 
     std::array<BigInt::MultiplicationMethod, 4> mMethods = { BigInt::MultiplicationMethod::auto_, BigInt::MultiplicationMethod::school, BigInt::MultiplicationMethod::karatsuba, BigInt::MultiplicationMethod::furer };
 

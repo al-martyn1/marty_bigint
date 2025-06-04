@@ -201,17 +201,13 @@ IntType shiftBitsToHigh(IntType val)
 
 
 //----------------------------------------------------------------------------
-template < typename T
-         , std::enable_if_t< std::is_integral_v<T>, int> = 0
-         >
-constexpr
-int getTypeDecimalDigits()
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+constexpr int getTypeDecimalDigits()
 {
     return int(std::numeric_limits<T>::digits10);
 }
 
-inline
-unsigned getPower10(int p)
+inline unsigned getPower10(int p)
 {
     unsigned res = 1;
     for(; p>0; --p)
@@ -219,6 +215,199 @@ unsigned getPower10(int p)
 
     return res;
 }
+
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+constexpr int getTypeOctalDigits()
+{
+    return (sizeof(T) * CHAR_BIT) / 3;
+}
+
+inline unsigned getPower8(int p)
+{
+    unsigned res = 1;
+    for(; p>0; --p)
+       res *= 8;
+
+    return res;
+}
+
+
+//----------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------
+namespace details{
+
+inline constexpr char digitToCharDec(int d)
+{
+    return char('0'+d);
+}
+
+inline constexpr char digitToCharAlpha(int d, bool bUpper)
+{
+    return char((bUpper?'A':'a')+d);
+}
+
+// constexpr
+// inline
+// std::size_t calcExpandSize(std::size_t curSize, std::size_t requiredSize)
+// {
+//     return curSize>requiredSize ? 0 : requiredSize-curSize;
+// }
+//  
+// inline
+// std::string makeStrRepitition(std::size_t n, const std::string &str)
+// {
+//     std::string res; res.reserve(str.size()*n);
+//     for(std::size_t i=0; i!=n; ++i)
+//         res.append(str);
+//     return res;
+// }
+
+} // namespace details
+
+//----------------------------------------------------------------------------
+
+
+//----------------------------------------------------------------------------
+inline constexpr int toDigit(char ch)
+{
+    return (ch>='0' && ch<='9')
+           ? int(ch-'0')
+           : (ch>='a' && ch<='f')
+             ? int(ch-'a') + 10
+             : (ch>='A' && ch<='F')
+               ? int(ch-'A') + 10
+               : -1
+           ;
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+constexpr int toDigit(T ch)
+{
+    return toDigit(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr bool isSpace(char ch)
+{
+    return ch==' ';
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr bool isSpace(T ch)
+{
+    return isSpace(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr bool isSign(char ch)
+{
+    return ch=='-' || ch=='+';
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr bool isSign(T ch)
+{
+    return isSign(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr int toSign(char ch)
+{
+    return ch=='-'
+           ? -1
+           : ch=='+'
+             ? +1
+             : 0
+           ;
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr int toSign(T ch)
+{
+    return toSign(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr bool isGroupSep(char ch)
+{
+    return ch=='\'' || ch=='_';
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr bool isGroupSep(T ch)
+{
+    return isGroupSep(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr bool isBase(char ch)
+{
+    return ch=='x' || ch=='X' || ch=='b' || ch=='B';
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr bool isBase(T ch)
+{
+    return isBase(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr int toBase(char ch)
+{
+    return ch=='x' || ch=='X'
+           ? 16
+           : ch=='b' || ch=='B'
+             ? 2
+             : 0
+           ;
+}
+
+//----------------------------------------------------------------------------
+template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+inline constexpr int toBase(T ch)
+{
+    return toSign(char(ch));
+}
+
+//----------------------------------------------------------------------------
+inline constexpr char digitToChar(int d, bool bUpper)
+{
+    return d<10 ? details::digitToCharDec(d) : details::digitToCharAlpha(d-10, bUpper);
+}
+
+//----------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------
+// inline constexpr std::size_t constCharLen(const char* str)
+// {
+//     return (*str == '\0') ? 0 : 1 + constCharLen(str + 1);
+// }
+
+//----------------------------------------------------------------------------
+template <std::size_t N>
+constexpr std::ptrdiff_t strLen(const char (&str)[N])
+{
+    return std::ptrdiff_t(N - 1); // -1 для исключения нулевого терминатора
+}
+
+inline std::ptrdiff_t strLen(const char* str)
+{
+    std::ptrdiff_t i = 0;
+    for(; *str; ++i, ++str) {}
+    return i;
+}
+
 
 //----------------------------------------------------------------------------
 

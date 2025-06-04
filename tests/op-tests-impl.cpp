@@ -110,8 +110,8 @@ std::string mkMarker(bool bGood, bool bIgnore)
 template<typename Op>
 bool testBigIntImpl(int &nTotal, int &nPassed, std::int64_t i1, std::int64_t i2, Op op)
 {
-    std::int64_t  iRes = 0; 
-    marty::BigInt bRes = 0; 
+    std::int64_t  iRes = 0;
+    marty::BigInt bRes = 0;
 
     std::string opStr = op(iRes, bRes, i1, i2);
 
@@ -335,10 +335,75 @@ bool testBigIntInvert(int &nTotal, int &nPassed, std::int64_t i1, std::int64_t i
                   );
 }
 
+inline void testConversions(std::int64_t i)
+{
+    using std::to_string;
+
+    std::string i64str = to_string(i);
+
+    marty::BigInt bi        = i;
+    marty::BigInt biFromStr = i64str;
+
+    std::cout << "Conv test\n"
+              << "  i64       : " << i64str        << "\n"
+              << "  BI        : " << to_string(bi) << "\n"
+              << "  BI FromStr: " << to_string(biFromStr) << "\n"
+              ;
+
+
+#if defined(USE_MARTY_DECIMAL) && USE_MARTY_DECIMAL!=0
+
+    marty::Decimal di  = i;
+    marty::Decimal ds  = i64str;
+    marty::Decimal dbi = bi;
+
+    std::cout << "  DI        : " << to_string(di )  << "\n"
+              << "  DS        : " << to_string(ds )  << "\n"
+              << "  DBI       : " << to_string(dbi)  << "\n"
+              ;
+
+#endif
+
+    // std::cout << mkMarker(bGood, bIgnoreRes);
+    // std::cout << i1 << " " << opStr << " " << i2 << " = " << std::flush;
+    //  
+    // if (bIgnoreRes)
+    // {
+    //     std::cout << bStr;
+    //     std::cout << " - ignored\n" << std::flush;
+    //     bGood = true;
+    // }
+    // else
+    // {
+    //     std::cout << iStr;
+    //  
+    //     if (bGood)
+    //     {
+    //         std::cout << " - passed\n" << std::flush;
+    //     }
+    //     else
+    //     {
+    //         std::cout << " - failed, result: " << bStr;
+    //         std::cout << " (" << marty::BigInt::getMultiplicationMethodName() << ")\n" << std::flush;
+    //     }
+    // }
+    //  
+    // ++nTotal;
+    //  
+    // if (bGood)
+    //    ++nPassed;
+    //  
+    // return bGood;
+
+
+}
 
 inline
 void doTestImpl(int &nTest, int &nPassed, std::int64_t i1, std::int64_t i2)
 {
+    testConversions(i1);
+    testConversions(i2);
+
     testBigIntPlus (nTest, nPassed, i1, i2);
     testBigIntMinus(nTest, nPassed, i1, i2);
     testBigIntMul  (nTest, nPassed, i1, i2);
@@ -389,8 +454,16 @@ constexpr auto high_bits_mask() {
 template<typename T>
 void printDigits10()
 {
-    std::cout << "Digits10 for " << typeid(T).name() << ": " << std::numeric_limits<T>::digits10 << "\n";
+    std::cout << "Digits10 for " << typeid(T).name() << ": " << std::numeric_limits<T>::digits10 << " (" << marty::bigint_utils::getTypeDecimalDigits<T>() << ")\n";
 }
+
+template<typename T>
+void printDigits8()
+{
+    std::cout << "Digits8 for " << typeid(T).name() << ": " << marty::bigint_utils::getTypeOctalDigits<T>() << "\n";
+}
+
+
 
 int unsafeMain(int argc, char* argv[])
 {
@@ -421,6 +494,13 @@ int unsafeMain(int argc, char* argv[])
 
     std::cout << "\n" << std::flush;
 
+    printDigits10<std::uint8_t>();   // 0xFF               - 255                  -  2
+    printDigits10<std::uint16_t>();  // 0xFFFF             - 65536                -  5
+    printDigits10<std::uint32_t>();  // 0xFFFFFFFF         - 4294967295           - 10
+    printDigits10<std::uint64_t>();  // 0xFFFFFFFFFFFFFFFF - 18446744073709551615 - 21
+
+    std::cout << "\n" << std::flush;
+
 
 
     // Добавить тест на переполнение - сложить два минимальных int64_t, сложить их же 
@@ -439,7 +519,17 @@ int unsafeMain(int argc, char* argv[])
     std::cout << "\n" << std::flush;
 
 
-    BigInt bi = BigInt(0); 
+    BigInt bi;
+
+    bi = marty::BigInt("125"); // -253 
+    std::cout << "marty::BigInt(\"125\"): " << to_string(bi) << "\n" << std::flush;
+    std::cout << "\n" << std::flush;
+    
+    bi = marty::BigInt("0x125"); // -253 
+    std::cout << "marty::BigInt(\"0x125\"): " << to_string(bi) << "\n" << std::flush;
+    std::cout << "\n" << std::flush;
+    
+    bi = BigInt(0); 
     std::string biStr;
 
     std::int64_t int64_max = std::numeric_limits<std::int64_t>::max();

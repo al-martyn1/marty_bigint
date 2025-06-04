@@ -30,3 +30,7 @@
 
 #endif
 
+
+#if !defined(USE_MARTY_DECIMAL)
+    #define USE_MARTY_DECIMAL 1
+#endif

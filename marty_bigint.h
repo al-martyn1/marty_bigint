@@ -25,6 +25,11 @@
 #endif
 
 
+#if defined(USE_MARTY_DECIMAL) && USE_MARTY_DECIMAL!=0
+    #include "marty_decimal/marty_decimal.h"
+#endif
+
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -108,7 +113,34 @@ public: // basic ctors & operators
 
 protected: // from int type construction helpers
 
+    template < typename T, std::enable_if_t< std::is_integral_v<T> && ! std::is_signed_v<T>, int> = 0 >
+    static
+    number_holder_t moduleFromUnsigned(T t)
+    {
+       number_holder_t module;
 
+       if constexpr (sizeof(unsigned_t)>=sizeof(T))
+       {
+           module.push_back(unsigned_t(t));
+       }
+       else
+       {
+           T divisor = T(unsigned_t(-1));
+           divisor += 1;
+
+           while(t)
+           {
+               module.push_back(unsigned_t(t%divisor));
+               t /= divisor;
+           }
+
+           shrinkLeadingZeros(module);
+       }
+
+       return module;
+    }
+
+    
     template < typename T, std::enable_if_t< std::is_integral_v<T> && std::is_signed_v<T>, int> = 0 >
     void assignSigned(T t)
     {
@@ -129,6 +161,9 @@ protected: // from int type construction helpers
 
        m_sign = 1;
 
+       m_module = moduleFromUnsigned(t);
+
+       #if 0
        if constexpr (sizeof(unsigned_t)>=sizeof(T))
        {
            m_module.push_back(unsigned_t(t));
@@ -146,6 +181,7 @@ protected: // from int type construction helpers
 
            shrinkLeadingZeros();
        }
+       #endif
     }
     
     template < typename T, std::enable_if_t< std::is_integral_v<T> && std::is_signed_v<T>, int> = 0 >
@@ -154,6 +190,260 @@ protected: // from int type construction helpers
     template < typename T, std::enable_if_t< std::is_integral_v<T> && ! std::is_signed_v<T>, int> = 0 >
     void assign(T t) { assignUnsigned(t); }
 
+
+    // При разборе не поддерживаем автоматическую 8ричную базу, но её можно явно задать
+    template<typename CharIterType>
+    static
+    CharIterType fromCharsTo(CharIterType b, CharIterType e, BigInt &be, int base=0, bool ignoreGroupSeps=true, bool *pNumberParsed=0)
+    {
+        if (base!=0 && base!=2 && base!=8 && base!=10 && base!=16)
+            throw std::invalid_argument("BigInt::fromCharsTo: invalid base taken");
+
+        if (pNumberParsed)
+            *pNumberParsed = false;
+
+        // bool hasLeadingZero = false;
+
+        be.reset();
+
+        // Пропускаем пробелы
+        for(; b!=e; ++b)
+        {
+            if (!bigint_utils::isSpace(*b))
+                break;
+        }
+
+        if (b==e)
+            return b;
+
+        // Проверяем знак
+        if (bigint_utils::isSign(*b))
+        {
+            be.m_sign = bigint_utils::toSign(*b);
+            ++b;
+        }
+
+        if (b==e)
+            return b;
+
+        // Пропускаем пробелы
+        for(; b!=e; ++b)
+        {
+            if (!bigint_utils::isSpace(*b))
+                break;
+        }
+
+        if (b==e)
+            return b;
+
+
+        int d = 0;
+
+        std::size_t zeroCount = 0;
+        // Пропускаем ведущие нули
+        for(; b!=e; ++b)
+        {
+            if (bigint_utils::isGroupSep(*b) && ignoreGroupSeps) // Игнорим разделители в виде апострофов и подчеркиваний - другие не поддерживаем
+                continue;
+
+            d = bigint_utils::toDigit(*b);
+            if (d!=0)
+                break;
+
+            ++zeroCount;
+        }
+
+
+        if (b==e)
+        {
+            be.reset();
+            if (zeroCount>0)
+            {
+                // У нас - ноль
+                if (pNumberParsed)
+                    *pNumberParsed = true;
+            }
+            return b;
+        }
+
+        if (zeroCount==1) // Строго один ведущий ноль - возможно, что это префикс
+        {
+            // Тут проверяем префикс 0b/0x
+
+            if (bigint_utils::isBase(*b))
+            {
+                if (base!=0) // Наткнулись на символ базы, но у нас есть явно заданная база, поэтому останавливаемся
+                {
+                    // У нас - ноль
+                    be.reset();
+                    if (pNumberParsed)
+                        *pNumberParsed = true;
+                    return b;
+                }
+
+                base = bigint_utils::toBase(*b);
+                // hasBase = true;
+                CharIterType baseIter = b;
+
+                ++b;
+                auto tmpDigit = b==e ? -1 : bigint_utils::toDigit(*b);
+                if (tmpDigit<0 || tmpDigit>=base) 
+                {
+                    // У нас есть префикс, но мы наткнулись на конец строки или на нецифровой символ,
+                    // или на цифровой символ, который преобразовался в символ больше базы
+                    // У нас - ноль, и мы возвращаем итератор на символ базы, так как числа после базы нет, значит, символ базы - это ошибка
+                    be.reset();
+                    if (pNumberParsed)
+                        *pNumberParsed = true;
+                    return baseIter;
+                }
+
+                // пропускаем нули после явной базы
+                for(; b!=e; ++b)
+                {
+                    if (bigint_utils::isGroupSep(*b) && ignoreGroupSeps) // Игнорим разделители в виде апострофов и подчеркиваний - другие не поддерживаем
+                        continue;
+        
+                    d = bigint_utils::toDigit(*b);
+                    if (d!=0)
+                        break;
+                }
+
+            }
+        }
+
+        // be.m_module = moduleFromUnsigned(unsigned(d));
+
+        if (base==0)
+            base = 10;
+
+        auto moduleBase = moduleFromUnsigned(unsigned(base));
+
+        // Тут мы уже определели базу, если не была задана
+        // Осталось только считать число
+
+        // У нас тут b не равен e
+
+        // У нас уже однозначно годно прочитанный ноль
+        if (pNumberParsed)
+            *pNumberParsed = true;
+
+        d = bigint_utils::toDigit(*b);
+        if (d<0 || d>=base)
+        {
+            // У нас - ноль
+            be.reset();
+            return b;
+        }
+
+        be.m_module = moduleFromUnsigned(unsigned(d));
+
+        ++b;
+        
+        for(; b!=e; ++b)
+        {
+            if (bigint_utils::isGroupSep(*b) && ignoreGroupSeps) // Игнорим разделители в виде апострофов и подчеркиваний - другие не поддерживаем
+                continue;
+
+            //auto 
+            d = bigint_utils::toDigit(*b);
+            if (d<0 || d>=base) // не цифра, или цифра не лезет в базу
+            {
+                be.reset();
+                return b;
+            }
+
+            // Тут цифру докидываем в число
+            be.m_module = moduleMul(be.m_module, moduleBase);
+            moduleAddInplace(be.m_module, moduleFromUnsigned(unsigned(d)));
+        }
+
+        shrinkLeadingZeros(be.m_module);
+
+        if (be.m_module.empty())
+            be.m_sign = 0;
+
+        if (be.m_sign==0 && !be.m_module.empty())
+            be.m_sign = 1;
+
+        return b;
+    }
+
+    // template<typename CharIterType>
+    // static
+    // CharIterType fromCharsTo(CharIterType b, CharIterType e, BigInt &be, int base=0, bool *pNumberParsed)
+
+        // bigint_utils::
+        // char digitToChar(int d, bool bUpper)
+        // int toDigit(char ch)
+        // bool isSpace(char ch)
+        // bool isSign(char ch)
+        // int toSign(char ch)
+        // bool isBase(char ch)
+        // int toBase(char ch)
+
+    // number_holder_t       m_module;
+    // int                   m_sign = 0;
+
+
+public: // converters from chars
+    
+// CharIterType fromCharsTo(CharIterType b, CharIterType e, BigInt &be, int base=0, bool ignoreGroupSeps=true, bool *pNumberParsed=0)
+    // Для присваивания из строки c проверкой
+    template<typename CharIterType>
+    CharIterType assignFromChars(CharIterType b, CharIterType e, int base=0, bool ignoreGroupSeps=true, bool *pNumberParsed=0)
+    {
+        reset();
+        return fromCharsTo(b, e, *this, base, ignoreGroupSeps, pNumberParsed);
+    }
+
+    // Через данный конструктор мы инициализируем BigInt длинным числом из строки, если не влезаем в интегральные константы
+    // Если разбор фейлится, то кидается исключение.
+    // template <std::size_t N> BigInt(const char (&pStrNum)[N], int base=0, bool ignoreGroupSeps=true) // Не будет ли тут оверхида с генерацией кучи ctors под каждую длину строки?
+    BigInt(const char *pStrNum, int base=0, bool ignoreGroupSeps=true)
+    {
+        auto b = &pStrNum[0];
+        auto e = b + bigint_utils::strLen(pStrNum);
+        bool numberParsed = false;
+        auto r = assignFromChars(b, e, base, ignoreGroupSeps, &numberParsed);
+        if (r!=e || !numberParsed)
+            std::invalid_argument("BigInt: invalid init from char*");
+    }
+
+    BigInt(const std::string &numStr, int base=0, bool ignoreGroupSeps=true)
+    {
+        auto b = numStr.begin();
+        auto e = numStr.end();
+        bool numberParsed = false;
+        auto r = assignFromChars(b, e, base, ignoreGroupSeps, &numberParsed);
+        if (r!=e || !numberParsed)
+            std::invalid_argument("BigInt: invalid init from std::string");
+    }
+
+
+#if defined(USE_MARTY_DECIMAL) && USE_MARTY_DECIMAL!=0
+
+    // Конвертация в/из marty::Decimal через строки - всё равно из двоичного в десятичное надо конвертировать, 
+    // а символы дают просто примерно двойной оверхид по памяти, но пофиг, что-то более оптимальное лень делать
+
+    BigInt(const marty::Decimal &d)
+    {
+        auto str = d.toString();
+        auto b   = str.begin();
+        auto e   = b + std::ptrdiff_t(str.size());
+        bool numberParsed = false;
+        auto r = assignFromChars(b, e, 10 /*base, ignoreGroupSeps, &numberParsed*/);
+        if (r!=e || !numberParsed || (*r)!='.')
+            std::invalid_argument("BigInt: invalid init from marty::Decimal");
+    }
+
+    operator marty::Decimal() const
+    {
+        return marty::Decimal::fromString(toString());
+    }
+
+#endif
+    
 
 public: // ctor/operator= from integer types
 
@@ -253,6 +543,7 @@ protected: // operations implementation helpers
     static number_holder_t moduleKaratsubaMul(const number_holder_t &m1, const number_holder_t &m2);
     static number_holder_t moduleSchoolMul(const number_holder_t &m1, const number_holder_t &m2);
     static number_holder_t moduleAutoMul(const number_holder_t &m1, const number_holder_t &m2);
+    static number_holder_t moduleMul(const number_holder_t &m1, const number_holder_t &m2);
 
     // Делит m1 на m2, остаток от деления остаётся в m1
     static number_holder_t moduleSchoolDiv(number_holder_t &m1, number_holder_t m2);
@@ -330,6 +621,16 @@ protected: // ctors
         shrinkLeadingZeros();
     }
 
+
+protected: // misc methods
+
+    void clear()
+    {
+        m_sign = 0;
+        m_module.clear();
+    }
+
+    void reset() { clear(); }
 
 public: // misc methods
 
@@ -423,14 +724,17 @@ public: // to integral convertion
 
 public: // to string convertion
 
+    // Цифры в обратном порядке - старшие в конце
+    std::string moduleToStringReversed(int base, bool upperCase=true) const;
+    std::string moduleToString(int base, bool upperCase=true) const;
+
     std::string toString() const;
     std::string to_string() const { return toString(); }
 
-
-public: // to integral type convertion operators
-
-    operator std::uint64_t() const    { std::uint64_t t = 0; moduleToIntegralConvertionHelper(t); return t; }
-    operator std::int64_t() const     { std::int64_t  t = 0; moduleToIntegralConvertionHelper(t); return t; }
+    // Нужно уметь задавать базу, наличие префикса, регистр
+    // Префикс всегда в нижнем регистре
+    // Группы не делаем, оставляем это для marty::format
+    std::string toStringEx(int base, bool upperCase=true, bool addPrefix=true) const;
 
 
 public: // compare, ==, !=, <, <=, >, >=
@@ -1436,6 +1740,27 @@ BigInt::number_holder_t BigInt::moduleAutoMul(const number_holder_t &m1, const n
 
 //----------------------------------------------------------------------------
 inline
+BigInt::number_holder_t BigInt::moduleMul(const number_holder_t &m1, const number_holder_t &m2)
+{
+    switch(s_multiplicationMethod)
+    {
+        case MultiplicationMethod::school:
+             return moduleSchoolMul(m1, m2);
+
+        case MultiplicationMethod::karatsuba:
+             return moduleKaratsubaMul(m1, m2);
+
+        case MultiplicationMethod::furer:
+             return moduleFurerMul(m1, m2);
+
+        case MultiplicationMethod::auto_: [[fallthrough]];
+        default:
+             return moduleAutoMul(m1, m2);
+    }
+}
+
+//----------------------------------------------------------------------------
+inline
 BigInt& BigInt::mulImpl(const BigInt &b)
 {
     m_sign = m_sign*b.m_sign;
@@ -1445,26 +1770,7 @@ BigInt& BigInt::mulImpl(const BigInt &b)
         return *this;
     }
 
-    switch(s_multiplicationMethod)
-    {
-        case MultiplicationMethod::school:
-             m_module = moduleSchoolMul(m_module, b.m_module);
-             break;
-
-        case MultiplicationMethod::karatsuba:
-             m_module = moduleKaratsubaMul(m_module, b.m_module);
-             break;
-
-        case MultiplicationMethod::furer:
-             m_module = moduleFurerMul(m_module, b.m_module);
-             break;
-
-        case MultiplicationMethod::auto_: [[fallthrough]];
-        default:
-             {
-                 m_module = moduleAutoMul(m_module, b.m_module);
-             }
-    }
+    m_module = moduleMul(m_module, b.m_module);
 
     return *this;
 }
@@ -1608,8 +1914,180 @@ BigInt& BigInt::remImpl(const BigInt &b)
 
 //----------------------------------------------------------------------------
 inline
+std::string BigInt::moduleToStringReversed(int base, bool upperCase) const
+{
+    if (base!=2 && base!=8 && base!=10 && base!=16)
+        throw std::invalid_argument("BigInt::moduleToStringReversed: invalid base taken");
+
+    if (m_sign==0 || m_module.empty())
+        return std::string("0");
+
+    std::string resStr;
+
+    if (base==2)
+    {
+        resStr.reserve(m_module.size()*chunkSizeBits);
+        for(auto chunk : m_module)
+        {
+            for(std::size_t i=0; i!=chunkSizeBits; ++i, chunk>>=1)
+            {
+                resStr.append(1, bigint_utils::digitToChar(chunk&1, upperCase));
+            }
+        }
+    }
+    else if (base==16)
+    {
+        constexpr const std::size_t chunkSizeHexDigits = chunkSizeBits/4;
+        resStr.reserve(m_module.size()*chunkSizeHexDigits);
+        for(auto chunk : m_module)
+        {
+            for(std::size_t i=0; i!=chunkSizeHexDigits; ++i, chunk>>=4)
+            {
+                resStr.append(1, bigint_utils::digitToChar(chunk&0xF, upperCase));
+            }
+        }
+    }
+    else if (base==10)
+    {
+        number_holder_t module10; module10.reserve(m_module.size());
+    
+        const int chunkPwr10 = bigint_utils::getTypeDecimalDigits<unsigned_t>();
+        const BigInt biDividerMod10 = bigint_utils::getPower10(chunkPwr10);
+    
+        number_holder_t rem = m_module;
+        while(true)
+        {
+            auto nextModule = moduleDiv(rem, biDividerMod10.m_module);
+            shrinkLeadingZeros(nextModule);
+            shrinkLeadingZeros(rem);
+    
+            if (rem.size()>1)
+                throw std::runtime_error("BigInt::moduleToStringReversed(): something goes wrong");
+    
+            if (rem.empty())
+                module10.push_back(0u);
+            else
+                module10.push_back(rem.front());
+    
+            if (nextModule.empty())
+                break;
+    
+            rem = nextModule;
+        }
+    
+        // 2718121812459045
+        // 2718121812459045 % 100 = 45
+        // 27181218124590   % 100 = 90
+        // 271812181245     % 100 = 45
+        // 2718121812       % 100 = 12
+        // 27181218         % 100 = 18
+        // 271812           % 100 = 12
+        // 2718             % 100 = 18
+        // 27               % 100 = 27
+    
+        // У нас остатки от деления на 10^N, начиная с младших разрядов
+    
+        //std::string resStr; 
+        resStr.reserve(std::size_t(chunkPwr10)*module10.size());
+    
+        for(auto r10: module10)
+        {
+            for(int i=0; i!=chunkPwr10; ++i)
+            {
+                resStr.append(1, bigint_utils::digitToChar(int(r10%10), upperCase));
+                r10 /= 10;
+            }
+        }
+    }
+    else // if (base==8)
+    {
+        number_holder_t module8; module8.reserve(m_module.size());
+    
+        const int chunkPwr8 = bigint_utils::getTypeOctalDigits<unsigned_t>();
+        const BigInt biDividerMod8 = bigint_utils::getPower8(chunkPwr8);
+    
+        number_holder_t rem = m_module;
+        while(true)
+        {
+            auto nextModule = moduleDiv(rem, biDividerMod8.m_module);
+            shrinkLeadingZeros(nextModule);
+            shrinkLeadingZeros(rem);
+    
+            if (rem.size()>1)
+                throw std::runtime_error("BigInt::moduleToStringReversed(): something goes wrong (8)");
+    
+            if (rem.empty())
+                module8.push_back(0u);
+            else
+                module8.push_back(rem.front());
+    
+            if (nextModule.empty())
+                break;
+    
+            rem = nextModule;
+        }
+    
+        //std::string resStr; 
+        resStr.reserve(std::size_t(chunkPwr8)*module8.size());
+    
+        for(auto r8: module8)
+        {
+            for(int i=0; i!=chunkPwr8; ++i)
+            {
+                resStr.append(1, bigint_utils::digitToChar(int(r8%8), upperCase));
+                r8 /= 8;
+            }
+        }
+    }
+
+    while(!resStr.empty() && resStr.back()=='0')
+        resStr.pop_back();
+     
+    if (resStr.empty())
+        resStr.append(1, '0');
+
+    return resStr;    
+}
+
+//----------------------------------------------------------------------------
+inline
+std::string BigInt::moduleToString(int base, bool upperCase) const
+{
+    std::string str = moduleToStringReversed(base, upperCase);
+    std::reverse(str.begin(), str.end());
+    return str;
+}
+
+//----------------------------------------------------------------------------
+inline
+std::string BigInt::toStringEx(int base, bool upperCase, bool addPrefix) const
+{
+    auto makeSignStr = [&]()
+    {
+        return m_sign<0 ? "-" : "";
+    };
+
+    if (!addPrefix || base==10)
+        return makeSignStr() + moduleToString(base, upperCase);
+
+    if (base!=8)
+    {
+        return makeSignStr() + std::string(base==2 ? "0xb" : "0x") + moduleToString(base, upperCase);
+    }
+
+    if (m_sign!=0)
+        return makeSignStr() + std::string("0") + moduleToString(base, upperCase);
+
+    return "0";
+}
+
+//----------------------------------------------------------------------------
+inline
 std::string BigInt::toString() const
 {
+    return toStringEx(10);
+
+#if 0
     if (m_sign==0)
         return std::string(1, '0');
 
@@ -1674,6 +2152,7 @@ std::string BigInt::toString() const
     std::reverse(resStr.begin(), resStr.end());
 
     return resStr;
+#endif
 }
 
 //----------------------------------------------------------------------------
