@@ -754,7 +754,7 @@ public: // to integral convertion
             t += std::ldexp(module[idx], curShift);
         }
 
-        return t;
+        return m_sign<0 ? -t : t;
     }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
