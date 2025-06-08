@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -662,7 +663,102 @@ protected: // to integral type convertion helpers
 
 public: // to integral convertion
 
+
+// inline
+// bool BigInt::moduleToIntegralConvertionHelper(std::int64_t &t) const
+// {
+//     t = 0;
+//  
+//     if (!m_sign)
+//         return true; // валидный ноль
+//  
+//     std::uint64_t t_ = 0;
+//     if (!moduleToIntegralConvertionHelper(t_))
+//     {
+//         // У нас не влезло даже в uint64_t
+//         if (m_sign<0)
+//             t = ~std::int64_t(t_) + std::int64_t(1);
+//         else
+//             t = std::int64_t(t_);
+//         return false;
+//     }
+//  
+//     constexpr const auto int64_max = std::numeric_limits<std::int64_t>::max();
+//     constexpr const auto uint64_int64_max = static_cast<std::uint64_t>(int64_max);
+//     constexpr const auto uint64_int64_min_abs = static_cast<std::uint64_t>(int64_max) + 1;
+//  
+//     if (m_sign<0)
+//     {
+//         t = - std::int64_t(t_);
+//         return t_ <= uint64_int64_min_abs;
+//     }
+//  
+//     t = std::int64_t(t_);
+//     return t_ <= uint64_int64_max;
+// }
+
+
+// inline
+// bool BigInt::moduleToIntegralConvertionHelper(std::uint64_t &t) const
+// {
+//     t = 0;
+//  
+//     if (!m_sign)
+//         return true; // валидный ноль
+//  
+//     auto module = m_module;
+//     shrinkLeadingZeros(module);
+//     if (module.empty())
+//         return true; // валидный ноль
+//  
+//     const auto maxShiftBitsValue  = int(sizeof(t)*CHAR_BIT);
+//  
+//     const auto shiftBitsStepValue = int(sizeof(unsigned_t)*CHAR_BIT);
+//  
+//     for(std::size_t idx=0u; idx!=module.size(); ++idx)
+//     {
+//         const auto curShift = int(shiftBitsStepValue*idx);
+//         if (curShift>=maxShiftBitsValue)
+//             return false; // ненулевое значение (а нулевых ведущих у нас нет) сдвигаем за пределы целевого типа - конвертация прошла с усечением.
+//  
+//         const std::uint64_t mi = std::uint64_t(module[idx]); // очередная часть
+//         const std::uint64_t miShifted = std::uint64_t(mi<<curShift);
+//         t |= miShifted;
+//     }
+//  
+//     return true; // текущий модуль влез в целевое значение
+// }
+
+
+    template < typename T, std::enable_if_t< std::is_floating_point_v<T>, int> = 0 >
+    MARTY_BIGINT_ARITHMETIC_CONVERTION_TYPE
+    operator T() const
+    {
+        T t = T(0.0);
+
+        if (!m_sign)
+            return t;
+
+        auto module = m_module;
+        shrinkLeadingZeros(module);
+        if (module.empty())
+            return t;
+
+        const auto shiftBitsStepValue = int(sizeof(unsigned_t)*CHAR_BIT);
+
+        for(std::size_t idx=0u; idx!=module.size(); ++idx)
+        {
+            const auto curShift = int(shiftBitsStepValue*idx);
+
+            // https://en.cppreference.com/w/cpp/numeric/math/ldexp
+            t += std::ldexp(module[idx], curShift);
+        }
+
+        return t;
+    }
+
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
+    MARTY_BIGINT_ARITHMETIC_CONVERTION_TYPE
     operator T() const
     {
         if constexpr (std::is_signed_v<T>)
