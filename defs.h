@@ -45,3 +45,6 @@
 #else
     #define MARTY_BIGINT_ARITHMETIC_CONVERTION_TYPE
 #endif
+
+// Надо настроить MARTY_BIGINT_FORCE_NUMBER_UNDERLYING_TYPE в std::uint8_t
+// если задан макрос MARTY_BIGINT_USE_MIN_SIZE_CHUNKS != 0
