@@ -654,6 +654,11 @@ public: // misc methods
         return m_sign==0 || m_module.empty() ? unsigned_t(0) : m_module.back();
     }
 
+    int sign() const
+    {
+        return m_sign;
+    }
+
 
 protected: // to integral type convertion helpers
 
