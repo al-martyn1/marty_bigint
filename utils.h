@@ -46,7 +46,7 @@ std::make_signed_t<T> toSignedCast(T t)
 
 //----------------------------------------------------------------------------
 template < typename T
-         , std::enable_if_t< std::is_integral_v<T> and not std::is_signed_v<T>, int> = 0
+         , std::enable_if_t< std::is_integral_v<T> && ! std::is_signed_v<T>, int> = 0
          >
 constexpr
 std::make_unsigned_t<T> toUnsignedAbs(T t)
@@ -56,7 +56,7 @@ std::make_unsigned_t<T> toUnsignedAbs(T t)
 }
 
 template < typename T
-         , std::enable_if_t< std::is_integral_v<T> and std::is_signed_v<T>, int> = 0
+         , std::enable_if_t< std::is_integral_v<T> && std::is_signed_v<T>, int> = 0
          >
 constexpr
 std::make_unsigned_t<T> toUnsignedAbs(T t)
