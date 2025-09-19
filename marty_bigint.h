@@ -911,8 +911,8 @@ public: // arithmetic operators '+', '-', '/', '*', ++, --
 
     BigInt& operator++()    { incImpl(); return *this; } // увеличивает, и возвращает уменьшенное
     BigInt& operator--()    { decImpl(); return *this; } // уменьшает, и возвращает уменьшенное
-    BigInt& operator++(int) { auto res = *this; incImpl(); return res; } // увеличивает, и возвращает исходное
-    BigInt& operator--(int) { auto res = *this; decImpl(); return res; } // уменьшает, и возвращает исходное
+    BigInt operator++(int)  { auto res = *this; incImpl(); return res; } // увеличивает, и возвращает исходное
+    BigInt operator--(int)  { auto res = *this; decImpl(); return res; } // уменьшает, и возвращает исходное
 
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
@@ -931,19 +931,19 @@ public: // arithmetic operators '+', '-', '/', '*', ++, --
     BigInt operator%(T t) const { return operator%(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator+=(T t) const { return operator+=(BigInt(t)); }
+    BigInt& operator+=(T t) { return operator+=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator-=(T t) const { return operator-=(BigInt(t)); }
+    BigInt& operator-=(T t) { return operator-=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator*=(T t) const { return operator*=(BigInt(t)); }
+    BigInt& operator*=(T t) { return operator*=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator/=(T t) const { return operator/=(BigInt(t)); }
+    BigInt& operator/=(T t) { return operator/=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator%=(T t) const { return operator%=(BigInt(t)); }
+    BigInt& operator%=(T t) { return operator%=(BigInt(t)); }
 
 
 
@@ -983,13 +983,13 @@ public: // bit ops
     BigInt operator^(T t) const { return operator^(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator&=(T t) const { return operator&=(BigInt(t)); }
+    BigInt& operator&=(T t) { return operator&=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator|=(T t) const { return operator|=(BigInt(t)); }
+    BigInt& operator|=(T t) { return operator|=(BigInt(t)); }
 
     template < typename T, std::enable_if_t< std::is_integral_v<T>, int> = 0 >
-    BigInt& operator^=(T t) const { return operator^=(BigInt(t)); }
+    BigInt& operator^=(T t) { return operator^=(BigInt(t)); }
 
 }; // class BigInt
 
