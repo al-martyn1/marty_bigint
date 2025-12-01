@@ -1,5 +1,10 @@
 #pragma once
 
+
+//----------------------------------------------------------------------------
+namespace marty {
+
+
 //----------------------------------------------------------------------------
 inline
 void BigInt::moduleInc(number_holder_t &m)
@@ -1055,7 +1060,7 @@ std::string BigInt::moduleToStringReversed(int base, bool upperCase) const
     {
         number_holder_t module10; module10.reserve(m_module.size());
     
-        const int chunkPwr10 = bigint_utils::getTypeDecimalDigits<unsigned_t>();
+        constexpr const int chunkPwr10 = bigint_utils::getTypeDecimalDigits<unsigned_t>();
         const BigInt biDividerMod10 = bigint_utils::getPower10(chunkPwr10);
     
         number_holder_t rem = m_module;
@@ -1107,7 +1112,7 @@ std::string BigInt::moduleToStringReversed(int base, bool upperCase) const
     {
         number_holder_t module8; module8.reserve(m_module.size());
     
-        const int chunkPwr8 = bigint_utils::getTypeOctalDigits<unsigned_t>();
+        constexpr const int chunkPwr8 = bigint_utils::getTypeOctalDigits<unsigned_t>();
         const BigInt biDividerMod8 = bigint_utils::getPower8(chunkPwr8);
     
         number_holder_t rem = m_module;
@@ -1388,3 +1393,7 @@ std::string to_string(const BigInt& b)
 }
 
 //----------------------------------------------------------------------------
+
+
+//----------------------------------------------------------------------------
+} // namespace marty

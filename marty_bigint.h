@@ -408,7 +408,7 @@ public: // converters from chars
         bool numberParsed = false;
         auto r = assignFromChars(b, e, base, ignoreGroupSeps, &numberParsed);
         if (r!=e || !numberParsed)
-            std::invalid_argument("BigInt: invalid init from char*");
+            throw std::invalid_argument("BigInt: invalid init from char*");
     }
 
     BigInt(const std::string &numStr, int base=0, bool ignoreGroupSeps=true)
@@ -418,7 +418,7 @@ public: // converters from chars
         bool numberParsed = false;
         auto r = assignFromChars(b, e, base, ignoreGroupSeps, &numberParsed);
         if (r!=e || !numberParsed)
-            std::invalid_argument("BigInt: invalid init from std::string");
+            throw std::invalid_argument("BigInt: invalid init from std::string");
     }
 
 
@@ -435,7 +435,7 @@ public: // converters from chars
         bool numberParsed = false;
         auto r = assignFromChars(b, e, 10 /*base, ignoreGroupSeps, &numberParsed*/);
         if (r!=e || !numberParsed || (*r)!='.')
-            std::invalid_argument("BigInt: invalid init from marty::Decimal");
+            throw std::invalid_argument("BigInt: invalid init from marty::Decimal");
     }
 
     operator marty::Decimal() const
@@ -997,13 +997,16 @@ public: // bit ops
 
 
 
-
-//----------------------------------------------------------------------------
-#include "impl/marty_bigint.h"
-
 //----------------------------------------------------------------------------
 } // namespace marty
 
 // marty::
 // #include "marty_bigint/marty_bigint.h"
+
+//----------------------------------------------------------------------------
+#include "impl/marty_bigint.h"
+
+//----------------------------------------------------------------------------
+
+
 

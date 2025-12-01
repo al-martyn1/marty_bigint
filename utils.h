@@ -71,6 +71,55 @@ std::make_unsigned_t<T> toUnsignedAbs(T t)
 
 
 //----------------------------------------------------------------------------
+template< typename IntType
+        , typename std::enable_if< (std::is_integral<IntType>::value)
+                                 , bool
+                                 >::type = true
+        >
+constexpr
+IntType makeHighBitsMask1()
+{
+    //if constexpr (sizeof(IntType)==1) return IntType(0x80u                );
+    if constexpr (sizeof(IntType)==2) return IntType(0x8000u              );
+    if constexpr (sizeof(IntType)==4) return IntType(0x80000000u          );
+    if constexpr (sizeof(IntType)==8) return IntType(0x8000000000000000ull);
+    else return IntType(0x80u); // 1
+}
+
+//----------------------------------------------------------------------------
+template< typename IntType
+        , typename std::enable_if< (std::is_integral<IntType>::value)
+                                 , bool
+                                 >::type = true
+        >
+constexpr
+IntType makeHighBitsMask4()
+{
+    //if constexpr (sizeof(IntType)==1) return IntType(0xF0u                );
+    if constexpr (sizeof(IntType)==2) return IntType(0xF000u              );
+    if constexpr (sizeof(IntType)==4) return IntType(0xF0000000u          );
+    if constexpr (sizeof(IntType)==8) return IntType(0xF000000000000000ull);
+    else return IntType(0xF0u); // 1
+}
+
+//----------------------------------------------------------------------------
+template< typename IntType
+        , typename std::enable_if< (std::is_integral<IntType>::value)
+                                 , bool
+                                 >::type = true
+        >
+constexpr
+IntType makeHighBitsMask8()
+{
+    //if constexpr (sizeof(IntType)==1) return IntType(0xFFu                );
+    if constexpr (sizeof(IntType)==2) return IntType(0xFF00u              );
+    if constexpr (sizeof(IntType)==4) return IntType(0xFF000000u          );
+    if constexpr (sizeof(IntType)==8) return IntType(0xFF00000000000000ull);
+    else return IntType(0xFFu); // 1
+}
+
+
+#if 0
 template<typename IntType> constexpr
 IntType makeHighBitsMask1();
 // {
@@ -147,7 +196,7 @@ MARTY_BIGINT_UTILS_MAKEHIGHBITSMASK8_IMPL(std::int32_t  , 0xFF000000         )
 MARTY_BIGINT_UTILS_MAKEHIGHBITSMASK8_IMPL(std::uint32_t , 0xFF000000u        )
 MARTY_BIGINT_UTILS_MAKEHIGHBITSMASK8_IMPL(std::int64_t  , 0xFF00000000000000 )
 MARTY_BIGINT_UTILS_MAKEHIGHBITSMASK8_IMPL(std::uint64_t , 0xFF00000000000000u)
-
+#endif
 //----------------------------------------------------------------------------
 
 
